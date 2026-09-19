@@ -191,8 +191,20 @@ const MANUAL = [
 // ── 输出报告 ─────────────────────────────────────────────────
 const pct = (a, b) => b ? `${a}/${b} = ${(a / b * 100).toFixed(1)}%` : "—";
 const L = [];
+// 语料指纹：报告对固定输入必须逐字节可复现。
+// 不用墙上时钟 —— 否则每次重跑都产生无意义 diff，
+// 「评测到底变了没有」这个问题就永远答不了。
+const crypto = await import("node:crypto");
+const fingerprint = crypto.createHash("sha256")
+  .update(runs.map((r) => r.file + ":" + JSON.stringify(r.summary)).join("|"))
+  .digest("hex").slice(0, 12);
+const fileHashes = crypto.createHash("sha256")
+  .update(fs.readdirSync(CORPUS).sort().map((f) => f + fs.readFileSync(path.join(CORPUS, f))).join(""))
+  .digest("hex").slice(0, 12);
+
 L.push("# 赛道雷达 · 离线评测报告\n");
-L.push(`> 生成时间 ${new Date().toISOString().slice(0, 19).replace("T", " ")}　语料 ${runs.length} 轮 / ${M.slots_total} 个字段槽位\n`);
+L.push(`> 语料 ${runs.length} 轮 / ${M.slots_total} 个字段槽位　语料指纹 \`${fileHashes}\`\n`);
+L.push(`> 本报告对固定语料**逐字节可复现**——不用墙上时钟。语料未变则重跑产物完全相同，\`git status\` 干净。\n`);
 L.push("本报告只包含**可机械判定**的指标。需要主观判断的维度一律留空并标注「需人工」——不用一个看起来精确的数字掩盖它其实是猜的。\n");
 
 L.push("## 一、自动指标（全部可从语料复算）\n");
