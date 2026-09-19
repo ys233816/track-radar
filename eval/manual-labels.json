@@ -1,0 +1,45 @@
+{
+  "_说明": "人工标注结果。这是本评测中唯一需要主观判断的部分。",
+  "_标注者": "单一标注者（AI 助手，非领域专家）。写进任何材料时必须如实说明这一点，不能说成「经专家标注」。",
+  "_rubric": {
+    "3": "直接回答了该字段问的问题",
+    "2": "部分相关，但需要明显的人工修正",
+    "1": "答非所问，或只是页面碎片/导航文字"
+  },
+  "_抽样方法": "主样本从「全部有值且带来源的槽位」(263 个) 中做**确定性等距抽样**，不按成败预筛。对照样本来自「高频常规」桶 —— 该桶定义即为「有值且通过校验」，存在选择性偏置，单列不参与主指标。",
+  "_未评分说明": "值为空的槽位（未获取 / 被拦截 / 被降级）不适用本维度 —— 它们考的是「缺口识别」，由 L4-E 的口径覆盖，不在这里凑分。",
+
+  "primary_subject": "无偏等距抽样（263 个有值槽位中抽 15）",
+  "primary": [
+    { "id": "S01", "product": "Otter.ai",    "field": "positioning",      "score": 3, "note": "" },
+    { "id": "S02", "product": "Granola",     "field": "key_limit",        "score": 3, "note": "" },
+    { "id": "S03", "product": "Fireflies.ai","field": "deployment",       "score": 3, "note": "" },
+    { "id": "S04", "product": "Otter.ai",    "field": "price_model",      "score": 3, "note": "" },
+    { "id": "S05", "product": "Fireflies.ai","field": "price_model",      "score": 3, "note": "简洁但完整，回答了计价单位" },
+    { "id": "S06", "product": "Jasper",      "field": "start_price",      "score": 3, "note": "" },
+    { "id": "S07", "product": "Writesonic",  "field": "free_tier",        "score": 3, "note": "" },
+    { "id": "S08", "product": "Jasper",      "field": "positioning",      "score": 3, "note": "两句话语义重复，措辞可再精简，但不影响可用性" },
+    { "id": "S09", "product": "Writesonic",  "field": "target_user",      "score": 3, "note": "" },
+    { "id": "S10", "product": "Otter.ai",    "field": "deployment",       "score": 3, "note": "" },
+    { "id": "S11", "product": "Fathom",      "field": "deployment",       "score": 1,
+      "note": "值 = 「Use this section as a quick way to audit that you've installed our Desktop App, Zoom App, and/or Chrome Extension.」—— 帮助文档的引导语，不是对该字段的回答。它**通过了来源校验**（URL 真实存在且来自官方帮助中心），因此这类失败无法被 URL 校验拦截。" },
+    { "id": "S12", "product": "Granola",     "field": "price_model",      "score": 3, "note": "" },
+    { "id": "S13", "product": "Fireflies.ai","field": "start_price",      "score": 3, "note": "" },
+    { "id": "S14", "product": "Grammarly",   "field": "core_capability",  "score": 3, "note": "" },
+    { "id": "S15", "product": "Copy.ai",     "field": "positioning",      "score": 3, "note": "" }
+  ],
+
+  "control_subject": "「高频常规」桶（定义即为有值且通过校验 —— 存在选择性偏置）",
+  "control": [
+    { "id": "C001", "product": "Otter.ai",    "field": "positioning",     "score": 3, "note": "" },
+    { "id": "C031", "product": "Fireflies.ai","field": "positioning",     "score": 3, "note": "英文输出（报告面向中文读者）—— 属 B 层「表达适配」，不计入本维度" },
+    { "id": "C063", "product": "Otter.ai",    "field": "key_limit",       "score": 3, "note": "" },
+    { "id": "C094", "product": "Grammarly",   "field": "price_model",     "score": 3, "note": "额外说明 Enterprise 未公开标价，超出预期" },
+    { "id": "C124", "product": "Writesonic",  "field": "price_model",     "score": 3, "note": "" },
+    { "id": "C156", "product": "Copy.ai",     "field": "free_tier",       "score": 3, "note": "" },
+    { "id": "C187", "product": "Granola",     "field": "positioning",     "score": 3, "note": "英文输出，同 C031" },
+    { "id": "C219", "product": "Otter.ai",    "field": "data_policy",     "score": 3, "note": "指出无法退出训练，是很到位的回答" },
+    { "id": "C245", "product": "Fireflies.ai","field": "price_model",     "score": 3, "note": "" },
+    { "id": "C277", "product": "Jasper",      "field": "core_capability", "score": 3, "note": "" }
+  ]
+}

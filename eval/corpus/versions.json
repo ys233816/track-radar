@@ -1,0 +1,26 @@
+{
+  "_说明": "语料版本标记。用于把「修复前 / 修复后」分成两组做对比，而不是混在一起算平均。",
+  "_如何分配": "按运行时间人工分配，且分配发生在查看指标之前 —— 先定版本，再算分数，避免按结果倒推分组。",
+  "_边界": "v0 = 尚未加入任何不变量（数值规范 + 推导字段同源）。v1 = 两条不变量均已生效。",
+
+  "v0": {
+    "label": "baseline",
+    "描述": "无论证来源校验之外的保护：数值可含单位/多数字、推导字段可与依据字段不同源",
+    "runs": [
+      "r05-meeting-partial.ndjson",
+      "r01-meeting-early.ndjson",
+      "r02-meeting-early3.ndjson",
+      "r04-writing-early2.ndjson",
+      "r03-writing-early.ndjson"
+    ]
+  },
+
+  "v1": {
+    "label": "v1-不变量生效",
+    "描述": "加入「数值必须是纯数字、含多数字即拒绝」与「推导字段必须与依据字段同源」两条代码层不变量",
+    "runs": [
+      "r07-writing-final.ndjson",
+      "r06-meeting-final.ndjson"
+    ]
+  }
+}
