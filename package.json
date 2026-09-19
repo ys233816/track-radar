@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
+    "zod": "^4.6.5"
+  },
+  "name": "track-radar",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI 赛道可比信息抽取器",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test/invariants.mjs",
+    "build:demo": "node build-demo.mjs"
+  }
+}

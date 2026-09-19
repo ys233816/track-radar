@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>赛道雷达 · AI 赛道可比信息抽取</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body data-palette="#0ca30c,#fab219,#c3c2b7">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+      <h1>赛道雷达</h1>
+      <p class="tagline">每个数字都能点回源头 · 查不到就说查不到</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button id="theme-toggle" class="btn ghost" type="button" aria-label="切换深浅色">◐</button>
+    <a class="btn ghost" id="corrections-link" href="/corrections.csv" download>校正记录 ↓</a>
+  </div>
+</header>
+
+<main class="app">
+
+  <!-- ─── 步骤 1：选赛道 ─── -->
+  <section id="step-track" class="panel">
+    <h2 class="step-title"><span class="step-num">1</span>选一条 AI 细分赛道</h2>
+    <p class="step-hint">系统会联网查找该赛道的主流产品，逐个抓取公开页面，抽取可比字段。</p>
+    <div id="track-grid" class="track-grid"></div>
+  </section>
+
+  <!-- ─── 步骤 2：确认选品 ─── -->
+  <section id="step-products" class="panel" hidden>
+    <h2 class="step-title"><span class="step-num">2</span>确认调研对象</h2>
+    <p class="step-hint">选品名单由 AI 联网检索得出，<strong>请你人工确认</strong>：删掉不属于这个赛道的，或补上漏掉的。最多 6 个。</p>
+    <div id="product-list" class="product-list"></div>
+    <div class="row-actions">
+      <button id="btn-add-product" class="btn ghost" type="button">+ 手动添加</button>
+      <button id="btn-run" class="btn primary" type="button">开始调研 →</button>
+    </div>
+  </section>
+
+  <!-- ─── 步骤 3：调研进度 ─── -->
+  <section id="step-progress" class="panel" hidden>
+    <h2 class="step-title"><span class="step-num">2</span>正在调研</h2>
+    <p class="step-hint">每个产品要经历「联网抓取 → 归一字段 → 来源校验」三步，请勿关闭页面。</p>
+    <div id="progress-log" class="progress-log" role="log" aria-live="polite"></div>
+  </section>
+
+  <!-- ─── 步骤 4：报告 ─── -->
+  <section id="step-report" hidden>
+
+    <div class="report-head">
+      <div>
+        <h2 id="report-title">报告</h2>
+        <p id="report-meta" class="report-meta"></p>
+      </div>
+      <button id="btn-restart" class="btn ghost" type="button">↺ 换一条赛道</button>
+    </div>
+
+    <!-- 主动服务钩子：缺口与冲突横幅 -->
+    <div id="banner" class="banner" hidden></div>
+
+    <!-- 汇总指标 -->
+    <div id="stat-row" class="stat-row"></div>
+
+    <!-- 图表 -->
+    <div class="charts">
+      <figure class="chart-card">
+        <figcaption>
+          <h3>每个产品的字段可信度构成</h3>
+          <p>共 <span id="chart1-total">—</span> 个字段槽位。<strong>「未获取」不是失败，是诚实</strong>——它标出了这份报告不能替你回答的部分。</p>
+        </figcaption>
+        <div id="chart-confidence" class="chart-body"></div>
+        <div id="legend-confidence" class="legend"></div>
+      </figure>
+
+      <figure class="chart-card">
+        <figcaption>
+          <h3>起步月费对比（USD/月）</h3>
+          <p>仅当官网能明确折算成美元月费时才计入；其余留空，不做估算。</p>
+        </figcaption>
+        <div id="chart-price" class="chart-body"></div>
+        <p id="price-note" class="chart-note" hidden></p>
+      </figure>
+    </div>
+
+    <!-- 对比表 -->
+    <section class="table-section">
+      <div class="table-head">
+        <div>
+          <h3>可比字段明细</h3>
+          <p class="step-hint">每一格都标了来源。<strong>点任意一格可以改正</strong>——你改的每一条都会被记下来，下次调研同一产品时会作为提示注入。</p>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="compare-table" class="compare"></table>
+      </div>
+    </section>
+
+    <!-- 缺口清单 -->
+    <section class="gap-section">
+      <h3>缺口清单</h3>
+      <p class="step-hint">以下字段在公开渠道没有找到可靠来源。<strong>这是本次调研的边界，不是可以糊弄过去的地方。</strong></p>
+      <div id="gap-list" class="gap-list"></div>
+    </section>
+
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="foot-endpoint"></span>
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

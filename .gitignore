@@ -1,0 +1,11 @@
+node_modules/
+package-lock.json
+
+# 运行时产生的校正记录（用户自己的数据，不入库）
+data/corrections.csv
+
+# 调试临时文件
+_*.html
+_*.png
+_*.json
+*.ndjson.new

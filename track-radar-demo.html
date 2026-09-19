@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>赛道雷达 · 演示版</title>
+<style>
+/* ── 调色板：light 为默认，dark 是另选的步级（不是自动翻转） ── */
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --border-strong: rgba(11, 11, 11, 0.18);
+  --hover: rgba(11, 11, 11, 0.035);
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+  --neutral: #c3c2b7;      /* 未获取 —— 刻意读作灰的「缺席」 */
+  --series-1: #2a78d6;
+  --series-1-soft: #cde2fb;
+  --shadow: 0 1px 2px rgba(11, 11, 11, .05), 0 8px 24px -12px rgba(11, 11, 11, .12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --hover: rgba(255, 255, 255, 0.05);
+    --neutral: #383835;
+    --series-1: #3987e5;
+    --series-1-soft: #184f95;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --gridline: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --hover: rgba(255, 255, 255, 0.05);
+  --neutral: #383835;
+  --series-1: #3987e5;
+  --series-1-soft: #184f95;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 640; letter-spacing: -0.01em; }
+p { margin: 0; }
+button { font: inherit; }
+
+/* ── 顶栏 ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 18px 28px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 20;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.mark {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  background: conic-gradient(from 200deg, var(--series-1) 0 42%, var(--good) 42% 68%, var(--warning) 68% 84%, var(--neutral) 84% 100%);
+}
+.brand h1 { font-size: 17px; }
+.tagline { font-size: 12.5px; color: var(--text-secondary); margin-top: 1px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ── 按钮 ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px; border-radius: 9px; cursor: pointer;
+  border: 1px solid transparent; transition: background .14s, border-color .14s, opacity .14s;
+  text-decoration: none; font-size: 14px; font-weight: 550;
+}
+.btn.primary { background: var(--text-primary); color: var(--surface-1); }
+.btn.primary:hover { opacity: .86; }
+.btn.primary:disabled { opacity: .35; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--text-secondary); border-color: var(--border); }
+.btn.ghost:hover { background: var(--hover); color: var(--text-primary); }
+
+.app { max-width: 1240px; margin: 0 auto; padding: 34px 28px 80px; }
+
+.panel { margin-bottom: 34px; }
+.step-title { display: flex; align-items: center; gap: 11px; font-size: 19px; margin-bottom: 7px; }
+.step-num {
+  width: 23px; height: 23px; border-radius: 50%; flex: none;
+  background: var(--text-primary); color: var(--surface-1);
+  font-size: 12.5px; font-weight: 700;
+  display: grid; place-items: center;
+}
+.step-hint { color: var(--text-secondary); font-size: 13.5px; max-width: 76ch; margin-bottom: 18px; }
+
+/* ── 赛道卡 ── */
+.track-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.track-card {
+  text-align: left; padding: 16px 17px; border-radius: 12px; cursor: pointer;
+  background: var(--surface-1); border: 1px solid var(--border);
+  transition: border-color .14s, transform .14s, box-shadow .14s;
+}
+.track-card:hover { border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--shadow); }
+.track-card[aria-pressed="true"] { border-color: var(--series-1); box-shadow: 0 0 0 1px var(--series-1); }
+.track-card .tc-name { font-weight: 620; font-size: 15px; }
+.track-card .tc-seed { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+/* ── 选品列表 ── */
+.product-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px; }
+.product-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 15px; border-radius: 11px;
+  background: var(--surface-1); border: 1px solid var(--border);
+}
+.product-row .pr-name { font-weight: 600; min-width: 130px; }
+.product-row .pr-vendor { color: var(--muted); font-size: 12.5px; min-width: 92px; }
+.product-row .pr-why { color: var(--text-secondary); font-size: 12.5px; flex: 1; }
+.product-row input[type="text"] { flex: 1; min-width: 90px; }
+.product-row .rm {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 17px; line-height: 1; padding: 4px 7px; border-radius: 6px;
+}
+.product-row .rm:hover { background: var(--hover); color: var(--critical); }
+.row-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+input[type="text"], select {
+  padding: 7px 10px; border-radius: 8px; font: inherit; font-size: 13.5px;
+  background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+}
+input[type="text"]:focus, select:focus { outline: 2px solid var(--series-1); outline-offset: 0; }
+
+/* ── 进度日志 ── */
+.progress-log {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+  padding: 15px 18px; max-height: 340px; overflow-y: auto;
+  font: 12.5px/1.85 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text-secondary); white-space: pre-wrap;
+}
+.progress-log .ln-err { color: var(--critical); }
+
+/* ── 报告头 ── */
+.report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.report-head h2 { font-size: 27px; letter-spacing: -0.02em; }
+.report-meta { color: var(--text-secondary); font-size: 13px; margin-top: 5px; }
+
+/* ── 横幅（主动服务钩子）── */
+.banner {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 17px; border-radius: 12px; margin-bottom: 20px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+}
+.banner .bn-title { font-weight: 620; font-size: 14px; display: flex; align-items: center; gap: 7px; }
+.banner .bn-item { font-size: 13px; color: var(--text-secondary); padding-left: 21px; }
+.banner .bn-item strong { color: var(--text-primary); font-weight: 600; }
+.banner.ok { border-left-color: var(--good); }
+
+/* ── 指标卡 ── */
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 11px; margin-bottom: 26px; }
+.stat {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 15px 17px;
+}
+.stat .s-label { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.stat .s-value { font-size: 29px; font-weight: 660; letter-spacing: -0.02em; margin-top: 5px; line-height: 1.1; }
+.stat .s-sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.dot.good { background: var(--good); }
+.dot.warning { background: var(--warning); }
+.dot.neutral { background: var(--neutral); }
+.dot.critical { background: var(--critical); }
+
+/* ── 图表 ── */
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; margin-bottom: 30px; }
+.chart-card {
+  margin: 0; padding: 19px 21px 15px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 13px;
+}
+.chart-card h3 { font-size: 14.5px; margin-bottom: 5px; }
+.chart-card figcaption p { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 16px; max-width: 62ch; }
+.chart-body { min-height: 60px; }
+.chart-note { font-size: 12px; color: var(--muted); margin-top: 9px; font-style: normal; }
+.chart-body svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart-body svg text { font: 11.5px system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+.legend { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--gridline); }
+.legend .lg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+
+/* ── 表格 ── */
+.table-section { margin-bottom: 30px; }
+.table-head { margin-bottom: 13px; }
+.table-head h3 { font-size: 15px; margin-bottom: 5px; }
+.table-scroll { overflow-x: auto; border-radius: 13px; border: 1px solid var(--border); background: var(--surface-1); }
+table.compare { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 900px; }
+table.compare th, table.compare td { padding: 11px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--gridline); font-size: 13px; }
+table.compare thead th {
+  position: sticky; top: 0; background: var(--surface-1); z-index: 2;
+  border-bottom: 1px solid var(--border-strong); font-size: 13px; font-weight: 620; white-space: nowrap;
+}
+table.compare thead th .th-vendor { font-weight: 400; color: var(--muted); font-size: 11.5px; display: block; margin-top: 2px; }
+table.compare tbody th {
+  font-weight: 550; color: var(--text-secondary); white-space: nowrap;
+  background: var(--surface-1); position: sticky; left: 0; z-index: 1;
+  border-right: 1px solid var(--gridline); min-width: 118px;
+}
+table.compare tbody tr:last-child td, table.compare tbody tr:last-child th { border-bottom: none; }
+table.compare td { color: var(--text-primary); max-width: 290px; }
+table.compare td.editable { cursor: text; }
+table.compare td.editable:hover { background: var(--hover); }
+
+.cell-val { display: block; word-break: break-word; }
+.cell-val.empty { color: var(--muted); font-style: italic; }
+.cell-foot { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; }
+.cell-foot .badge { display: inline-flex; align-items: center; gap: 4px; color: var(--text-secondary); white-space: nowrap; }
+.cell-foot a { color: var(--series-1); text-decoration: none; }
+.cell-foot a:hover { text-decoration: underline; }
+table.compare td.flag-rejected { background: color-mix(in oklab, var(--critical) 9%, transparent); }
+.rejected-note { font-size: 11px; color: var(--critical); margin-top: 4px; display: block; }
+tr.dim-row td, tr.dim-row th { background: color-mix(in oklab, var(--hover) 60%, transparent); }
+
+/* ── 缺口清单 ── */
+.gap-section { margin-bottom: 30px; }
+.gap-section h3 { font-size: 15px; margin-bottom: 5px; }
+.gap-list { display: flex; flex-direction: column; gap: 7px; margin-top: 13px; }
+.gap-row {
+  display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  background: var(--surface-1); border: 1px solid var(--border);
+}
+.gap-row .g-field { color: var(--text-secondary); min-width: 108px; }
+.gap-row .g-missing { color: var(--text-primary); }
+.gap-row .g-missing em { color: var(--muted); font-style: normal; }
+.chip {
+  font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  background: var(--hover); color: var(--text-secondary); border: 1px solid var(--border);
+}
+
+/* ── 编辑弹层 ── */
+.editor {
+  position: fixed; z-index: 60; width: 330px;
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: 12px; box-shadow: var(--shadow); padding: 15px;
+}
+.editor h4 { margin: 0 0 3px; font-size: 13.5px; }
+.editor .ed-sub { font-size: 11.5px; color: var(--muted); margin-bottom: 11px; }
+.editor label { display: block; font-size: 11.5px; color: var(--text-secondary); margin-bottom: 4px; }
+.editor input[type="text"] { width: 100%; margin-bottom: 10px; }
+.editor .ed-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.editor .reason {
+  font-size: 11.5px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  background: var(--hover); color: var(--text-secondary); border: 1px solid var(--border);
+}
+.editor .reason[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+.editor .ed-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.editor .ed-actions .btn { padding: 7px 13px; font-size: 13px; }
+
+/* ── 演示版 ── */
+.track-card:disabled { opacity: .42; cursor: not-allowed; }
+.track-card:disabled:hover { transform: none; box-shadow: none; border-color: var(--border); }
+.demo-note {
+  padding: 13px 17px; margin-bottom: 26px; border-radius: 12px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-left: 3px solid var(--series-1);
+  font-size: 13px; color: var(--text-secondary); line-height: 1.7;
+}
+.demo-note strong { color: var(--text-primary); font-weight: 620; }
+.demo-note code {
+  font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--hover); padding: 1px 5px; border-radius: 4px;
+}
+
+/* ── 杂项 ── */
+.foot { padding: 20px 28px 34px; text-align: center; color: var(--muted); font-size: 11.5px; }
+.toast {
+  position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
+  background: var(--text-primary); color: var(--surface-1);
+  padding: 11px 20px; border-radius: 10px; font-size: 13.5px; z-index: 80;
+  box-shadow: var(--shadow);
+}
+[hidden] { display: none !important; }
+
+@media (max-width: 720px) {
+  .app { padding: 22px 16px 60px; }
+  .topbar { padding: 14px 16px; }
+  .charts { grid-template-columns: 1fr; }
+}
+
+</style>
+</head>
+<body data-palette="#0ca30c,#fab219,#c3c2b7">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+      <h1>赛道雷达</h1>
+      <p class="tagline">每个数字都能点回源头 · 查不到就说查不到</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button id="theme-toggle" class="btn ghost" type="button" aria-label="切换深浅色">◐</button>
+    <a class="btn ghost" id="corrections-link" href="/corrections.csv" download>校正记录 ↓</a>
+  </div>
+</header>
+
+<main class="app">
+
+  <!-- ─── 步骤 1：选赛道 ─── -->
+  <section id="step-track" class="panel">
+    <h2 class="step-title"><span class="step-num">1</span>选一条 AI 细分赛道</h2>
+    <p class="step-hint">系统会联网查找该赛道的主流产品，逐个抓取公开页面，抽取可比字段。</p>
+    <div id="track-grid" class="track-grid"></div>
+  </section>
+
+  <!-- ─── 步骤 2：确认选品 ─── -->
+  <section id="step-products" class="panel" hidden>
+    <h2 class="step-title"><span class="step-num">2</span>确认调研对象</h2>
+    <p class="step-hint">选品名单由 AI 联网检索得出，<strong>请你人工确认</strong>：删掉不属于这个赛道的，或补上漏掉的。最多 6 个。</p>
+    <div id="product-list" class="product-list"></div>
+    <div class="row-actions">
+      <button id="btn-add-product" class="btn ghost" type="button">+ 手动添加</button>
+      <button id="btn-run" class="btn primary" type="button">开始调研 →</button>
+    </div>
+  </section>
+
+  <!-- ─── 步骤 3：调研进度 ─── -->
+  <section id="step-progress" class="panel" hidden>
+    <h2 class="step-title"><span class="step-num">2</span>正在调研</h2>
+    <p class="step-hint">每个产品要经历「联网抓取 → 归一字段 → 来源校验」三步，请勿关闭页面。</p>
+    <div id="progress-log" class="progress-log" role="log" aria-live="polite"></div>
+  </section>
+
+  <!-- ─── 步骤 4：报告 ─── -->
+  <section id="step-report" hidden>
+
+    <div class="report-head">
+      <div>
+        <h2 id="report-title">报告</h2>
+        <p id="report-meta" class="report-meta"></p>
+      </div>
+      <button id="btn-restart" class="btn ghost" type="button">↺ 换一条赛道</button>
+    </div>
+
+    <!-- 主动服务钩子：缺口与冲突横幅 -->
+    <div id="banner" class="banner" hidden></div>
+
+    <!-- 汇总指标 -->
+    <div id="stat-row" class="stat-row"></div>
+
+    <!-- 图表 -->
+    <div class="charts">
+      <figure class="chart-card">
+        <figcaption>
+          <h3>每个产品的字段可信度构成</h3>
+          <p>共 <span id="chart1-total">—</span> 个字段槽位。<strong>「未获取」不是失败，是诚实</strong>——它标出了这份报告不能替你回答的部分。</p>
+        </figcaption>
+        <div id="chart-confidence" class="chart-body"></div>
+        <div id="legend-confidence" class="legend"></div>
+      </figure>
+
+      <figure class="chart-card">
+        <figcaption>
+          <h3>起步月费对比（USD/月）</h3>
+          <p>仅当官网能明确折算成美元月费时才计入；其余留空，不做估算。</p>
+        </figcaption>
+        <div id="chart-price" class="chart-body"></div>
+        <p id="price-note" class="chart-note" hidden></p>
+      </figure>
+    </div>
+
+    <!-- 对比表 -->
+    <section class="table-section">
+      <div class="table-head">
+        <div>
+          <h3>可比字段明细</h3>
+          <p class="step-hint">每一格都标了来源。<strong>点任意一格可以改正</strong>——你改的每一条都会被记下来，下次调研同一产品时会作为提示注入。</p>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="compare-table" class="compare"></table>
+      </div>
+    </section>
+
+    <!-- 缺口清单 -->
+    <section class="gap-section">
+      <h3>缺口清单</h3>
+      <p class="step-hint">以下字段在公开渠道没有找到可靠来源。<strong>这是本次调研的边界，不是可以糊弄过去的地方。</strong></p>
+      <div id="gap-list" class="gap-list"></div>
+    </section>
+
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="foot-endpoint"></span>
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="application/json" id="demo-data">{"config":{"tracks":[{"id":"ai-writing","name":"AI 写作","seed":"AI writing assistant / AI 文案写作工具"},{"id":"ai-support","name":"AI 客服","seed":"AI customer support / AI 客服机器人平台"},{"id":"ai-coding","name":"AI 编程","seed":"AI coding assistant / AI 编程助手"},{"id":"ai-design","name":"AI 设计","seed":"AI image design / AI 设计生成工具"},{"id":"ai-meeting","name":"AI 会议纪要","seed":"AI meeting notes / AI 会议转写纪要工具"},{"id":"ai-search","name":"AI 搜索问答","seed":"AI search engine / AI 搜索问答产品"}],"fields":[{"key":"positioning","label":"产品定位","hint":"一句话说明它是什么、给谁用"},{"key":"target_user","label":"目标用户","hint":"主要面向的个人或团队类型"},{"key":"core_capability","label":"核心能力","hint":"最关键的功能特性，不要罗列全部功能"},{"key":"free_tier","label":"免费额度","hint":"免费版的限制；没有免费版就写「无免费版」"},{"key":"start_price","label":"起步价（原文）","hint":"官网写的最低付费档原文，含币种和周期"},{"key":"price_model","label":"计价方式","hint":"按席位 / 按用量 / 一次性 / 定制报价"},{"key":"price_usd_month","label":"起步月费","hint":"最低付费档按年付口径折算成 USD/月的单个数字（不带单位、不带区间）；折算不出来就 null","numeric":true},{"key":"key_limit","label":"关键限制","hint":"官网明写的硬限制：额度、并发、席位、字数"},{"key":"deployment","label":"部署方式","hint":"SaaS / 私有化 / 本地 / 浏览器插件"},{"key":"data_policy","label":"数据使用政策","hint":"用户数据是否被用于训练模型"}],"confidence":{"verified":{"label":"已核实","desc":"有可点开的第三方或官方页面支撑"},"official_claim":{"label":"官方声明","desc":"仅有厂商自述，未经独立验证"},"unknown":{"label":"未获取","desc":"公开渠道未找到，需人工补"}}},"reports":{"ai-writing":{"type":"report","track":{"id":"ai-writing","name":"AI 写作"},"products":[{"name":"Grammarly","fields":{"positioning":{"value":"Grammarly 定位为基于 AI 的免费写作辅助工具，法语官网称其为「aide à la rédaction gratuite basée sur l'IA」。","source_url":"https://www.grammarly.com/fr/?utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=7765364799529&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44&msclkid=a5d9c669466b11aa3ae6ac50158e0d44&utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44","confidence":"official_claim","verified":true},"target_user":{"value":"面向个人用户，Pro 档也可用于团队撰写；免费档归为面向个人。","source_url":"https://www.grammarly.com/fr/?utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=7765364799529&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44&msclkid=a5d9c669466b11aa3ae6ac50158e0d44&utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44","confidence":"official_claim","verified":true},"core_capability":{"value":"核心能力包括无错误写作、AI 文本生成（免费版每月 100 次提示，Pro 版每月 2,000 次提示）以及整句改写。","source_url":"https://www.grammarly.com/fr/?utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=7765364799529&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44&msclkid=a5d9c669466b11aa3ae6ac50158e0d44&utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44","confidence":"official_claim","verified":true},"free_tier":{"value":"免费版为 $0/月，包含基础写作辅助、语气检测和每月 100 次 AI 请求。","source_url":"https://www.eweek.com/artificial-intelligence/meilleurs-outils-decriture-ia-pour-2026-lequel-repond-a-vos-besoins/#1","confidence":"verified","verified":true},"start_price":{"value":"Pro 档起步价为 $12 USD/成员/月（按年付），月付为 $30 USD。","source_url":"https://www.grammarly.com/fr/?utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=7765364799529&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44&msclkid=a5d9c669466b11aa3ae6ac50158e0d44&utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44","confidence":"official_claim","verified":true},"price_model":{"value":"按成员/席位按月订阅，分年付与月付；Enterprise 为定制报价。","source_url":"https://www.eweek.com/artificial-intelligence/meilleurs-outils-decriture-ia-pour-2026-lequel-repond-a-vos-besoins/#1","confidence":"verified","verified":true},"price_usd_month":{"value":"12","source_url":"https://www.grammarly.com/fr/?utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=7765364799529&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44&msclkid=a5d9c669466b11aa3ae6ac50158e0d44&utm_source=bing&utm_medium=cpc&utm_campaign=627579374&utm_content=81364000332388&utm_term=traduire%20en%20anglais&keywordid=81364255143868&targetid=kwd-81364255143868:loc-164&adgroup=1301823012916774&device=c&matchtype=p&network=o&extension=&language=fr&clickid=a5d9c669466b11aa3ae6ac50158e0d44&gclid=a5d9c669466b11aa3ae6ac50158e0d44","confidence":"official_claim","verified":true,"numeric":12},"key_limit":{"value":"主要限制为 AI 生成提示次数：免费版每月 100 次，Pro 版每成员每月 2,000 次；达到上限后生成功能暂停直到重置。并发、席位、字数限制未在官网明示。","source_url":"https://comparedge.com/tools/grammarly/pricing#tier-pro","confidence":"verified","verified":true},"deployment":{"value":"支持浏览器扩展、Mac/Windows 桌面端以及 iOS/Android 移动端；未发现私有化/本地部署信息。","source_url":"https://www.grammarly.com/technical-specifications-june-2024","confidence":"official_claim","verified":true},"data_policy":{"value":"默认对通过销售团队购买的 Grammarly for Education、Business、Pro 和 Enterprise 账户关闭产品改进与训练，不将用户内容用于模型训练；直接从官网购买的团队账户默认开启但管理员可为组织退出；不允许第三方服务提供商基于用户内容训练模型。","source_url":"https://support.grammarly.com/hc/en-us/articles/25555503115277-Product-Improvement-and-Training-Control","confidence":"official_claim","verified":true}},"vendor":"Superhuman","page_count":38},{"name":"Jasper","fields":{"positioning":{"value":"Jasper 是面向营销场景的生成式平台，帮助营销人员用 AI 创建符合品牌调性的文字与视觉内容。","source_url":"https://www.jasper.ai/pricing?fpr=akshayhallur","confidence":"official_claim","verified":true},"target_user":{"value":"目标用户为营销人员，包括社交媒体经理、SEO 专家、广告经理、邮件营销人员和营销管理者等。","source_url":"https://www.jasper.ai/pricing?fpr=akshayhallur","confidence":"official_claim","verified":true},"core_capability":{"value":"核心能力包括 Jasper IQ 层将品牌指南、语气和消息带入每次生成；Studio 和 Grid 让营销人员无需技术设置即可设计并运行自动化内容生产；并提供 Campaign Brief、Blog Post、Press release、Landing Page 等营销模板。","source_url":"https://www.jasper.ai/free-trial?fpr=amira-72","confidence":"official_claim","verified":true},"free_tier":{"value":"无免费版；仅提供 7 天免费试用，需绑定信用卡，试用结束后自动转为所选付费计划。","source_url":"https://help.jasper.ai/hc/en-us/articles/18618674196891-Free-Trial?page=1","confidence":"official_claim","verified":true},"start_price":{"value":"最低付费档为 Pro 计划，年付 $59/月，月付 $69/月；Business 计划为定制报价。","source_url":"https://www.jasper.ai/pricing?fpr=akshayhallur","confidence":"official_claim","verified":true},"price_model":{"value":"订阅制：Pro 为固定月费（年付或月付），Business 为定制报价。","source_url":"https://www.jasper.ai/pricing?fpr=akshayhallur","confidence":"official_claim","verified":true},"price_usd_month":{"value":"59","source_url":"https://www.jasper.ai/pricing?fpr=akshayhallur","confidence":"official_claim","verified":true,"numeric":59},"key_limit":{"value":"Pro 计划限制为 1 个席位、2 个 Brand Voices、5 个 Knowledge assets、3 个 Audiences；Business 计划提供无限 IQ 定制和企业级治理。","source_url":"https://www.jasper.ai/free-trial?fpr=amira-72","confidence":"official_claim","verified":true},"deployment":{"value":"提供 Chrome 或 Edge 浏览器扩展；提供 API 及 API 集成（BigQuery、Google Sheets、Zapier、Make 等）。","source_url":"https://www.jasper.ai/pricing?fpr=akshayhallur","confidence":"official_claim","verified":true},"data_policy":{"value":"输入 Jasper 的数据和知识产权不会被用于训练底层大语言模型；Jasper 不保留任何用户输出的所有权。","source_url":"https://www.jasper.ai/ethics?trk=public_post_comment-text","confidence":"official_claim","verified":true}},"vendor":"Jasper","page_count":30},{"name":"Copy.ai","fields":{"positioning":{"value":"Copy.ai positions itself as an AI platform for writing better marketing copy and content.","source_url":"https://www.copy.ai/?via=androniki-nikki","confidence":"official_claim","verified":true},"target_user":{"value":"Copy.ai targets marketers and small business owners.","source_url":"https://www.wordstream.com/blog/best-ai-tools?cid=Nurture_WS_Email_PPC_PerfTipNewsletter_BlogVisit#1#1","confidence":"verified","verified":true},"core_capability":{"value":"Copy.ai offers Brand Voice (training content on brand tone) and Infobase (storing company information for content generation).","source_url":"https://www.copy.ai/blog/june-company-update","confidence":"official_claim","verified":true},"free_tier":{"value":"Copy.ai offers a free account with 2,000 words per month, no trial, and no credit card required.","source_url":"https://www.copy.ai/blog/december-company-update","confidence":"official_claim","verified":true},"start_price":{"value":"Copy.ai's Chat plan starts at $29/month billed monthly or $24/month billed annually.","source_url":"https://saaszap.com/copy-ai-pricing/#is-copy-ai-worth-the-price","confidence":"verified","verified":true},"price_model":{"value":"Copy.ai's Chat plan is a flat-rate subscription for 5 seats; workflow runs consume credits billed separately, scoped through sales.","source_url":"https://comparedge.com/tools/copy-ai/pricing#plans","confidence":"verified","verified":true},"price_usd_month":{"value":null,"source_url":null,"confidence":"unknown","verified":false,"downgraded":{"reason":"换算来源与起步价来源不同（costbench.com ≠ saaszap.com），可能不是同一口径，不予采信","dropped":"23","conflicting_url":"https://costbench.com/software/ai-writing-tools/copy-ai/"}},"key_limit":{"value":"Free account is limited to 2,000 words per month; tool input limit is 1,000 characters.","source_url":"https://www.copy.ai/blog/december-company-update","confidence":"official_claim","verified":true},"deployment":{"value":"Copy.ai is offered as a cloud, SaaS, web-based deployment.","source_url":"https://www.softwareadvice.com/marketing/copy-ai-profile/vs/jarvis/#1#1","confidence":"verified","verified":true},"data_policy":{"value":"Copy.ai states it does not train on user data, share prompts, or sell data.","source_url":"https://www.copy.ai/security","confidence":"official_claim","verified":true}},"vendor":"Copy.ai","page_count":36},{"name":"Writesonic","fields":{"positioning":{"value":"Writesonic helps you create content, optimize for SEO, and track brand visibility across AI search platforms, scaling from solo marketers to enterprises.","source_url":"https://docs.writesonic.com/docs/different-subscription-plans-of-writesonic","confidence":"official_claim","verified":true},"target_user":{"value":"Target users include small to medium teams, scaling teams, enterprises, and agencies.","source_url":"https://docs.writesonic.com/docs/different-subscription-plans-of-writesonic","confidence":"official_claim","verified":true},"core_capability":{"value":"Writesonic offers AI Search Tracking (GEO), SEO & Content (including Content Strategy, AI Article Writer, Content Optimization, SEO & Content AI Agent), SEO Site Audit, Chatsonic, and Data & Integrations.","source_url":"https://writesonic.com/pricing?hubs_content-cta=global-nav-mobile-list-item-link&hubs_content=www.hubspot.fr/products/cms/paragraph-rewriter&irclickid=yUp05f27vxycW54Q1612TRd8UksWH0TG90ya1Q0&irgwc=1&mpid=2710523&utm_id=am2710523#1","confidence":"official_claim","verified":true},"free_tier":{"value":"Writesonic offers a free trial with $0, 1 user, 25 one-time credits, access to all features, 5 Chatsonic generations, 1 article, 1 site audit (up to 100 pages), and 1 Writing Style.","source_url":"https://geekflare.com/reviews/writesonic-review/#1#1#1","confidence":"verified","verified":true},"start_price":{"value":"Basic plan starts at $249 per month billed monthly, or $199 per month billed annually.","source_url":"https://docs.writesonic.com/docs/different-subscription-plans-of-writesonic","confidence":"official_claim","verified":true},"price_model":{"value":"Subscription-based pricing with monthly or annual billing; additional users and projects can be added at extra cost.","source_url":"https://writesonic.com/pricing?hubs_content-cta=global-nav-mobile-list-item-link&hubs_content=www.hubspot.fr/products/cms/paragraph-rewriter&irclickid=yUp05f27vxycW54Q1612TRd8UksWH0TG90ya1Q0&irgwc=1&mpid=2710523&utm_id=am2710523#1","confidence":"official_claim","verified":true},"price_usd_month":{"value":null,"source_url":null,"confidence":"unknown","verified":false},"key_limit":{"value":"Basic plan: 2 users, 2 projects, 100 articles per month, 40 site audits per month (1,200 pages), 100 AI prompts tracked per month; Growth plan: 5 users, 3 projects, 200 articles per month, 60 site audits per month (2,500 pages), 200 AI prompts tracked per month; Enterprise: custom.","source_url":"https://docs.writesonic.com/docs/different-subscription-plans-of-writesonic","confidence":"official_claim","verified":true},"deployment":{"value":"Available as cloud service, browser extension, and API.","source_url":"https://techreviewer.co/pdf/writesonic?resource_class=Product&resource_id=701#1#1","confidence":"verified","verified":true},"data_policy":{"value":"Writesonic does not use Customer Data to train or fine-tune any general-purpose, foundation, or large-language model; however, it may use de-identified Inputs, Outputs, and Usage Data to operate, secure, debug, evaluate, and improve the Services.","source_url":"https://writesonic.com/legal/privacy-policy?hubs_content=blog.hubspot.com%2Fservice%2Ftag%2Fchatbots&hubs_content-cta=30-chatbot-tools-that-will-revolutionize-your-customer-service&Tag=organic%20traffic&hubs_post-cta=blognavcard-marketing#1","confidence":"official_claim","verified":true}},"vendor":"Writesonic","page_count":35}],"summary":{"total":40,"verified":9,"claim":29,"unknown":2,"rejected":0,"coverage":95,"fabrication_rate":0},"generated_at":"2026-09-19T17:26:05.142Z","elapsed_ms":281999},"ai-meeting":{"type":"report","track":{"id":"ai-meeting","name":"AI 会议纪要"},"products":[{"name":"Otter.ai","fields":{"positioning":{"value":"Otter.ai is an AI notetaker and conversational knowledge engine that transcribes meetings and turns them into searchable knowledge to power workflows, supporting Zoom, Google Meet, Microsoft Teams, and more.","source_url":"https://otter.ai/","confidence":"official_claim","verified":true},"target_user":{"value":"Otter.ai targets individuals, professionals, small teams, and larger teams/enterprises, with plans ranging from free for individuals and small teams to Business and Enterprise for larger organizations.","source_url":"https://otter.ai/pricing?msockid=089dc62b127f6de8098fd06113c76c41","confidence":"official_claim","verified":true},"core_capability":{"value":"Otter.ai provides live multi-language transcription with speaker recognition, automated meeting summaries with decisions, action items, and insights, AI Chat across meetings and connected apps, CRM sales insights, and conversation organization via Channels.","source_url":"https://otter.ai/","confidence":"official_claim","verified":true},"free_tier":{"value":"The free tier includes 300 monthly transcription minutes, 30 minutes per conversation, and 3 lifetime imported audio/video files per user.","source_url":"https://otter.ai/start-for-free?gad_source=1&gclid=CjwKCAiAqfe8BhBwEiwAsne6gSDYViJ8ubjMd7Y-suSjIwGxJ50H13Jq9LSZPM9V-VoZ6HgA-6iJOxoC7tQQAvD_BwE&hsa_acc=6047463090&hsa_ad=625426675395&hsa_cam=17218937187&hsa_grp=138258109324&hsa_kw=speech%20transcription&hsa_mt=p&hsa_net=adwords&hsa_src=g&hsa_tgt=kwd-306816602&hsa_ver=3&utm_campaign=search-prospecting-consumer-nonbrand-transcription-phrase&utm_content=lp_tr_at_cta_basic&utm_medium=search&utm_source=google_ads&utm_term=speech%20transcription","confidence":"official_claim","verified":true},"start_price":{"value":"The lowest paid plan (Pro) is $16.99 per user per month on monthly billing or $8.33 per user per month on annual billing.","source_url":"https://sonix.ai/resources/otter-ai-pricing/amp/#1","confidence":"verified","verified":true},"price_model":{"value":"Otter.ai uses a per-user/seat-based subscription model with tiered plans: Basic (free), Pro, Business, and Enterprise.","source_url":"https://otter.ai/pricing?msockid=089dc62b127f6de8098fd06113c76c41","confidence":"official_claim","verified":true},"price_usd_month":{"value":"8.33","source_url":"https://sonix.ai/resources/otter-ai-pricing/amp/#1","confidence":"verified","verified":true,"numeric":8.33},"key_limit":{"value":"Key limits include 300 transcription minutes per user per month on the free plan, 30 minutes max per conversation, 3 lifetime pre-recorded audio/video file imports, 25 most recent conversation history, 20 monthly Otter AI Chat queries per user on the free tier (3 per conversation), and SSO requiring a 100-user license.","source_url":"https://otter.ai/pricing?msockid=089dc62b127f6de8098fd06113c76c41","confidence":"official_claim","verified":true},"deployment":{"value":"Otter.ai is available as a SaaS/web app, iOS and Android mobile apps, Mac/Windows desktop app, and Chrome capture; no on-premises deployment was stated.","source_url":"https://otter.ai/","confidence":"official_claim","verified":true},"data_policy":{"value":"Otter trains proprietary models on de-identified, encrypted user data with an automatic process and no manual human review; the privacy policy confirms no opt-out for this training.","source_url":"https://theaiagentindex.com/agents/otter-ai","confidence":"verified","verified":true}},"vendor":"Otter.ai","page_count":30},{"name":"Granola","fields":{"positioning":{"value":"The AI notepad for people in back-to-back meetings; notes, actions and memory handled for you, quietly.","source_url":"https://www.granola.ai/?utm_source=www.sheconomist.com&utm_medium=referral&utm_campaign=how-you-can-strategically-prepare-for-layoffs","confidence":"official_claim","verified":true},"target_user":{"value":"Over half of Granola users are in leadership roles; founders and leaders at companies like Vercel, Ramp, and Roblox, and partners at top VC firms like Benchmark, Sequoia, Accel, and Union Square Ventures use it.","source_url":"https://www.granola.ai/blog/series-a?utm_source=www.tedchats.ai&utm_medium=referral&utm_campaign=ai-can-control-your-pc","confidence":"official_claim","verified":true},"core_capability":{"value":"Granola captures audio directly from your device, transcribes in real time and deletes audio immediately, with no recordings stored; you capture rough notes during the conversation, then AI enhances them afterward, with your notes in black and AI additions in gray.","source_url":"https://www.granola.ai/blog/granola-free-trial-get-started","confidence":"official_claim","verified":true},"free_tier":{"value":"Granola offers a free Basic plan at $0 per user per month, including AI meeting notes, limited meeting history, AI chat within and across meetings, shared folders for collaboration, customized note templates, multi-language support, and the ability to opt out of model training any time.","source_url":"https://www.granola.ai/pricing?gad_source=1&gad_campaignid=23163563498&gbraid=0AAAABBDtJ3ARLRbMs-Oxtg2nvVPu3CBYI&gclid=Cj0KCQiAgP_JBhD-ARIsANpEMxwwTFRJGpWwj0yQtiVvW11IJLu73bkrcHZ05nvvXcoQoUhHvXqD_UMaAm-KEALw_wcB","confidence":"official_claim","verified":true},"start_price":{"value":"Granola's lowest paid plan is Business at $14 per user per month.","source_url":"https://www.granola.ai/pricing?gad_source=1&gad_campaignid=23163563498&gbraid=0AAAABBDtJ3ARLRbMs-Oxtg2nvVPu3CBYI&gclid=Cj0KCQiAgP_JBhD-ARIsANpEMxwwTFRJGpWwj0yQtiVvW11IJLu73bkrcHZ05nvvXcoQoUhHvXqD_UMaAm-KEALw_wcB","confidence":"official_claim","verified":true},"price_model":{"value":"Granola charges per seat, not per meeting or storage gigabyte; you pay a flat monthly fee for each active user in your workspace, and your bill adjusts automatically when team members join or leave.","source_url":"https://www.granola.ai/blog/granola-pricing-teams-per-user-enterprise","confidence":"official_claim","verified":true},"price_usd_month":{"value":"14","source_url":"https://www.granola.ai/pricing?gad_source=1&gad_campaignid=23163563498&gbraid=0AAAABBDtJ3ARLRbMs-Oxtg2nvVPu3CBYI&gclid=Cj0KCQiAgP_JBhD-ARIsANpEMxwwTFRJGpWwj0yQtiVvW11IJLu73bkrcHZ05nvvXcoQoUhHvXqD_UMaAm-KEALw_wcB","confidence":"official_claim","verified":true,"numeric":14},"key_limit":{"value":"You have to manually start Granola for a meeting; it won't auto-join or auto-record anything.","source_url":"https://www.granola.ai/security?utm_source=brevo&utm_campaign=AI%20Docket%20-%20Granola%20-%207825&utm_medium=email","confidence":"official_claim","verified":true},"deployment":{"value":"Granola is available for macOS 13+, Windows 10+, and iOS; download for macOS, Windows, or from the App Store for iOS.","source_url":"https://www.granola.ai/blog/granola-free-trial-get-started","confidence":"official_claim","verified":true},"data_policy":{"value":"Granola does not allow third parties like OpenAI or Anthropic to use your data to train their AI models; it trains on your anonymized data to improve the product, you can opt out in Settings, and enterprise users have model training turned off by default.","source_url":"https://www.granola.ai/security?utm_source=brevo&utm_campaign=AI%20Docket%20-%20Granola%20-%207825&utm_medium=email","confidence":"official_claim","verified":true}},"vendor":"Granola","page_count":43},{"name":"Fathom","fields":{"positioning":{"value":"Fathom 是一款会议助手，可录制、转录并总结 Zoom、Google Meet 或 Microsoft Teams 会议，让用户专注于对话而不是记笔记。","source_url":"https://chromewebstore.google.com/detail/fathom-ai-note-taker-for/nhocmlminaplaendbabmoemehbpgdemn?snuoi","confidence":"official_claim","verified":true},"target_user":{"value":"面向个人用户和团队；免费席位适合不常做笔记、需要查看团队通话的经理，以及希望查看通话并提取客户洞察的产品团队。","source_url":"https://help.fathom.video/en/articles/4202241?utm_source=omidsaffari.com&utm_medium=referral&utm_content=free-vs-paid-ai-meeting-note-takers-2026&utm_campaign=growth","confidence":"official_claim","verified":true},"core_capability":{"value":"可录制、转录并总结 Zoom、Google Meet 或 Microsoft Teams 会议，自动生成通话总结，更新 Salesforce 和 HubSpot，支持共享高亮片段和跨通话搜索。","source_url":"https://chromewebstore.google.com/detail/fathom-ai-note-taker-for/nhocmlminaplaendbabmoemehbpgdemn?snuoi","confidence":"official_claim","verified":true},"free_tier":{"value":"免费版包含无限录制和存储、38 种语言的无限转录，每月前 5 次通话可使用高级总结；CRM 同步最多支持同一邮箱域下 3 个用户，免费版为标准体验且无可定制项。","source_url":"https://help.fathom.video/en/articles/5290881?utm_source=omidsaffari.com&utm_medium=referral&utm_content=free-vs-paid-ai-meeting-note-takers-2026&utm_campaign=growth","confidence":"official_claim","verified":true},"start_price":{"value":"第三方资料显示，付费版按年付最低约每用户每月 15–16 美元（Premium $16/用户/月，Team $15/用户/月），但官方未公开最低付费档。","source_url":"https://www.usecarly.com/blog/fathom-pricing/","confidence":"verified","verified":true},"price_model":{"value":"按席位计价，年付价格低于月付（月付高 20–35%）；Team 和 Business 均有 2 席位最低要求。","source_url":"https://www.usecarly.com/blog/fathom-pricing/","confidence":"verified","verified":true},"price_usd_month":{"value":null,"source_url":null,"confidence":"unknown","verified":false},"key_limit":{"value":"免费版每月仅前 5 次通话可生成高级 AI 总结，之后只能使用 General/Enhanced 模板；CRM 同步（HubSpot、Salesforce、Close）最多支持同一邮箱域下 3 个用户。","source_url":"https://help.fathom.video/en/articles/5290881?utm_source=omidsaffari.com&utm_medium=referral&utm_content=free-vs-paid-ai-meeting-note-takers-2026&utm_campaign=growth","confidence":"official_claim","verified":true},"deployment":{"value":"提供 Google Meet Chrome 扩展和 Fathom 桌面应用，以浏览器插件/桌面应用方式部署。","source_url":"https://chromewebstore.google.com/detail/fathom-ai-note-taker-for/nhocmlminaplaendbabmoemehbpgdemn?snuoi","confidence":"official_claim","verified":true},"data_policy":{"value":"不会向第三方出售数据；AI 子处理器（Anthropic、OpenAI、Google）不得使用用户数据训练模型；Fathom 会使用去标识化客户数据改进自有模型，用户可在设置中或组织设置中选择退出。","source_url":"https://help.fathom.video/en/articles/296512","confidence":"official_claim","verified":true}},"vendor":"Fathom Video","page_count":38},{"name":"Fireflies.ai","fields":{"positioning":{"value":"Fireflies.ai helps your team transcribe, summarize, search, and analyze voice conversations.","source_url":"https://apps.apple.com/ua/app/fireflies-ai-notetaker/id6463164203#1","confidence":"official_claim","verified":true},"target_user":{"value":"Sales reps, customer success teams, recruiters, product managers and executives.","source_url":"https://fireflies.ai/blog/live-assist/","confidence":"official_claim","verified":true},"core_capability":{"value":"Automatically records and transcribes meetings; AI search; 5-minute review of 1-hour meetings; view action items, tasks, questions; create soundbites; use AskFred; send notes to Slack, Notion, Asana; Conversation Intelligence (talk time, sentiment, monologues, objections/competitors).","source_url":"https://apps.apple.com/ua/app/fireflies-ai-notetaker/id6463164203#1","confidence":"official_claim","verified":true},"free_tier":{"value":"Free plan includes 3 free meeting transcriptions by default, unlimited transcription and AI summaries with Auto Join, 400 minutes storage per seat, 20 one-time AI credits per seat, 2-hour max recording per meeting, uploads up to 100MB/150min, and 3 public channels.","source_url":"https://guide.fireflies.ai/articles/6176608577-learn-about-fireflies-free-plan-features?lang=en","confidence":"official_claim","verified":true},"start_price":{"value":"Pro: $10/mo/user billed annually or $18/mo/user billed monthly.","source_url":"https://guide.fireflies.ai/articles/3734844560-learn-about-the-fireflies-pricing-plans","confidence":"official_claim","verified":true},"price_model":{"value":"Prices per seat, billed annually; monthly billing available on Pro and Business.","source_url":"https://fireflies.ai/es/use-cases/sales","confidence":"official_claim","verified":true},"price_usd_month":{"value":null,"source_url":null,"confidence":"unknown","verified":false,"downgraded":{"reason":"换算来源与起步价来源不同（guide.fireflies.ai ≠ guide.fireflies.ai），可能不是同一口径，不予采信","dropped":"10","conflicting_url":"https://guide.fireflies.ai/articles/9606045468-fireflies-billing-terms"}},"key_limit":{"value":"Free plan: 400 minutes storage per seat, 20 one-time AI credits per seat, 2-hour max meeting recording, uploads up to 100MB/150min, 3 public channels.","source_url":"https://guide.fireflies.ai/articles/6176608577-learn-about-fireflies-free-plan-features?lang=en","confidence":"official_claim","verified":true},"deployment":{"value":"Available via web browser, mobile app, Chrome extension, and desktop app; records meetings from Zoom, Google Meet, Microsoft Teams, Webex.","source_url":"https://guide.fireflies.ai/articles/6176608577-learn-about-fireflies-free-plan-features?lang=en","confidence":"official_claim","verified":true},"data_policy":{"value":"Fireflies does not use meeting content or personal data to train AI models; zero data retention policy with third-party vendors; users retain full ownership and control of their data.","source_url":"https://guide.fireflies.ai/articles/2154538358-policy-on-keeping-information-safe?lang=en","confidence":"official_claim","verified":true}},"vendor":"Fireflies.ai","page_count":45},{"name":"tl;dv","fields":{"positioning":{"value":"tl;dv is an AI meeting intelligence platform that turns every conversation into automated CRM updates, follow-ups, briefings, and pattern insights.","source_url":"https://tldv.io/about-us/","confidence":"official_claim","verified":true},"target_user":{"value":"用户包括销售团队、客户成功部门、咨询公司，以及任何将会议洞察视为重要资产的团队。","source_url":"https://tldv.io/ja/about-us/","confidence":"official_claim","verified":true},"core_capability":{"value":"tl;dv captures meetings on Zoom, Google Meet, Teams, and in-person; transcribes over 100 languages at >95% accuracy; auto-updates CRM, drafts follow-ups, runs custom templates (MEDDIC, SPIN, SPICE), and answers questions across all past conversations with 5,000+ integrations.","source_url":"https://tldv.io/about-us/","confidence":"official_claim","verified":true},"free_tier":{"value":"免费计划永久免费，提供无限录制、40+语言无限转录，每月10次AI会议笔记，无需信用卡。","source_url":"https://tldv.io/blog/tldv-vs-krisp/#elementor-toc__heading-anchor-2","confidence":"official_claim","verified":true},"start_price":{"value":"Free; Pro at $29/mo monthly ($18/mo billed annually, $216/yr); Business at $39/mo monthly ($29/mo billed annually, $348/yr); Enterprise (custom).","source_url":"https://tldv.io/blog/tldv-vs-krisp/#elementor-toc__heading-anchor-2","confidence":"official_claim","verified":true},"price_model":{"value":"Pro/Business按席位收费，Enterprise为定制报价并可选按用量计价。","source_url":"https://tldv.io/ja/blog/tldv-vs-bluedot/#elementor-toc__heading-anchor-23","confidence":"official_claim","verified":true},"price_usd_month":{"value":"18","source_url":"https://tldv.io/blog/tldv-vs-krisp/#elementor-toc__heading-anchor-2","confidence":"official_claim","verified":true,"numeric":18},"key_limit":{"value":"免费版每月仅10次AI会议笔记和10次AI查询，付费计划无使用上限。","source_url":"https://tldv.io/blog/tldv-vs-sembly/","confidence":"official_claim","verified":true},"deployment":{"value":"企业版可提供私有化AI托管选项。","source_url":"https://tldv.io/enterprise-governance/?wg-choose-original=true","confidence":"official_claim","verified":true},"data_policy":{"value":"会议数据在欧盟存储，使用AWS法兰克福和Google Cloud基础设施，绝不用客户数据训练AI模型。","source_url":"https://tldv.io/about-us/","confidence":"official_claim","verified":true}},"vendor":"tl;dv","page_count":39}],"summary":{"total":50,"verified":5,"claim":43,"unknown":2,"rejected":0,"coverage":96,"fabrication_rate":0},"generated_at":"2026-09-19T17:42:47.792Z","elapsed_ms":346897}},"note":"\u003cstrong>这是演示版，不是空壳。\u003c/strong>页面里 2 份报告都是\u003cstrong>真实联网调研跑出来的原始结果\u003c/strong>（AI 写作 × 4 产品、AI 会议纪要 × 5 产品），数据\u003cstrong>未经人工修饰\u003c/strong>——包括模型答得含糊的地方和查不到的字段。\u003cbr>\n        \u003cstrong>动手试一下：\u003c/strong>点表格里任意一格就能改数据、选修改原因。同一个字段改满 \u003cstrong>2 次\u003c/strong>，它会当场升级为「高频错误点」并出现在顶部横幅——这是自进化钩子的真实行为，记录存在你浏览器本地，不联网。\u003cbr>\n        \u003cstrong>关于「拦截的编造」为什么显示 0：\u003c/strong>0 才是目标值。它的机制是——模型每给出一个来源 URL，代码都会拿去和本次检索真实返回的 URL 集合比对，对不上就判定为编造、清空该值并降级为「未获取」。实测中确实拦截到过，例如模型给 Fathom 的「起步价」标注来源 \u003ccode>comparedge.com\u003c/code>，而该 URL 在本次检索结果里从未出现。\u003cbr>\n        \u003cstrong>演示版不含：\u003c/strong>实时调研新赛道（需要后端持有 API 密钥，且浏览器直连多数 API 会被跨域拦截）。完整版用 \u003ccode>npm start\u003c/code> 启动。"}</script>
+<script>
+/* 赛道雷达 · 前端
+   设计约束：图表颜色低于 3:1 对比度 → 必须印可见数字标签，不能只靠颜色区分。
+
+   双模式：同一份源码既能跑在 Node 后端上（联网调研），
+   也能被构建脚本内联成单文件演示版（数据烘焙进 HTML，双击即开）。 */
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// 单文件演示版会内联一段 <script id="demo-data" type="application/json">；没有就是联网模式。
+const DEMO = (() => {
+  const el = document.getElementById("demo-data");
+  try { return el ? JSON.parse(el.textContent) : null; } catch { return null; }
+})();
+const DEMO_STORE_KEY = "track-radar-corrections";
+
+// 校正记录的存储后端：联网模式走服务器 CSV，演示模式走 localStorage。
+// 两种模式跑的是同一套「同产品同字段改 ≥2 次 → 升级为高频错误点」逻辑。
+const store = DEMO ? {
+  all() { try { return JSON.parse(localStorage.getItem(DEMO_STORE_KEY) || "[]"); } catch { return []; } },
+  add(rec) { const a = this.all(); a.push({ ts: new Date().toISOString(), ...rec }); localStorage.setItem(DEMO_STORE_KEY, JSON.stringify(a)); return a.length; },
+  recurring() {
+    const m = new Map();
+    for (const c of this.all()) {
+      const k = c.product + "||" + c.field;
+      if (!m.has(k)) m.set(k, { product: c.product, field: c.field, count: 0, last: c });
+      m.get(k).count++;
+    }
+    return [...m.values()].filter((e) => e.count >= 2);
+  },
+  csv() {
+    const head = ["时间", "产品", "字段", "AI原值", "用户改后值", "修改原因", "原来源URL"];
+    const q = (v) => (/[",\n]/.test(String(v ?? "")) ? `"${String(v ?? "").replace(/"/g, '""')}"` : String(v ?? ""));
+    return "﻿" + [head.join(","), ...this.all().map((c) => [c.ts, c.product, c.field, c.ai_value, c.new_value, c.reason, c.source_url].map(q).join(","))].join("\n") + "\n";
+  },
+} : null;
+
+const state = { cfg: null, track: null, products: [], report: null };
+
+/* ── NDJSON 流读取 ─────────────────────────────────────────── */
+async function streamNDJSON(url, body, onEvent) {
+  const res = await fetch(url, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) throw new Error(`请求失败 ${res.status}`);
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  const drain = () => {
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (line) { try { onEvent(JSON.parse(line)); } catch {} }
+    }
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    drain();
+  }
+  drain();
+  if (buf.trim()) { try { onEvent(JSON.parse(buf)); } catch {} }
+}
+
+function toast(msg, ms = 2600) {
+  const t = $("toast");
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+/* ── 步骤 1：赛道 ──────────────────────────────────────────── */
+function renderTracks() {
+  const has = (id) => !DEMO || !!(DEMO.reports && DEMO.reports[id]);
+  $("track-grid").innerHTML = state.cfg.tracks.map((t) => {
+    const ok = has(t.id);
+    return `
+    <button class="track-card" type="button" data-id="${esc(t.id)}" aria-pressed="false" ${ok ? "" : "disabled"}>
+      <div class="tc-name">${esc(t.name)}</div>
+      <div class="tc-seed">${ok ? esc(t.seed.split("/")[0].trim()) : "演示版未包含该赛道"}</div>
+    </button>`;
+  }).join("");
+
+  $("track-grid").querySelectorAll(".track-card").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      $("track-grid").querySelectorAll(".track-card").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+      state.track = state.cfg.tracks.find((t) => t.id === btn.dataset.id);
+      if (DEMO) loadDemoReport(state.track.id); else discover();
+    });
+  });
+}
+
+// 演示模式：直接载入烘焙好的真实报告，不走后端
+function loadDemoReport(trackId) {
+  const r = DEMO.reports[trackId];
+  if (!r) return toast("演示版未包含该赛道");
+  state.report = JSON.parse(JSON.stringify(r));
+  state.report.recurring = store.recurring();
+  state.products = state.report.products.map((p) => ({ name: p.name, vendor: p.vendor || "" }));
+  renderReport();
+  show("step-report");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* ── 步骤 2：选品 ──────────────────────────────────────────── */
+async function discover() {
+  show("step-products");
+  $("product-list").innerHTML = `<div class="progress-log" id="disc-log">正在联网检索「${esc(state.track.name)}」的主流产品…</div>`;
+  const logEl = () => $("disc-log");
+
+  try {
+    await streamNDJSON("/api/discover", { trackId: state.track.id }, (ev) => {
+      if (ev.type === "log") logEl().textContent += `\n${ev.msg}`;
+      else if (ev.type === "products") { state.products = ev.products; renderProducts(); }
+      else if (ev.type === "error") { logEl().textContent += `\n✗ ${ev.msg}`; }
+    });
+  } catch (e) {
+    logEl().textContent += `\n✗ ${e.message}`;
+  }
+  if (!state.products.length) {
+    state.products = [{ name: "", vendor: "", why: "自动检索失败，请手动填写产品名" }];
+    renderProducts();
+  }
+}
+
+function renderProducts() {
+  $("product-list").innerHTML = state.products.map((p, i) => `
+    <div class="product-row" data-i="${i}">
+      <input type="text" class="pr-name-input" value="${esc(p.name)}" placeholder="产品名" aria-label="产品名">
+      <input type="text" class="pr-vendor-input" value="${esc(p.vendor || "")}" placeholder="公司" aria-label="公司">
+      <span class="pr-why">${esc(p.why || "")}</span>
+      <button class="rm" type="button" title="移除" aria-label="移除该产品">×</button>
+    </div>`).join("");
+
+  $("product-list").querySelectorAll(".product-row").forEach((row) => {
+    const i = Number(row.dataset.i);
+    row.querySelector(".pr-name-input").addEventListener("input", (e) => { state.products[i].name = e.target.value; });
+    row.querySelector(".pr-vendor-input").addEventListener("input", (e) => { state.products[i].vendor = e.target.value; });
+    row.querySelector(".rm").addEventListener("click", () => {
+      state.products.splice(i, 1); renderProducts();
+    });
+  });
+}
+
+function addProduct() {
+  if (state.products.length >= 6) return toast("最多 6 个产品");
+  state.products.push({ name: "", vendor: "", why: "手动添加" });
+  renderProducts();
+  const inputs = $("product-list").querySelectorAll(".pr-name-input");
+  inputs[inputs.length - 1].focus();
+}
+
+/* ── 步骤 3：调研 ──────────────────────────────────────────── */
+async function run() {
+  const list = state.products.filter((p) => p.name && p.name.trim());
+  if (!list.length) return toast("至少需要一个产品名");
+
+  show("step-progress");
+  $("progress-log").innerHTML = "";
+  const push = (msg, cls) => {
+    const el = document.createElement("div");
+    if (cls) el.className = cls;
+    el.textContent = msg;
+    $("progress-log").appendChild(el);
+    $("progress-log").scrollTop = $("progress-log").scrollHeight;
+  };
+
+  const t0 = Date.now();
+  try {
+    await streamNDJSON("/api/research", { trackId: state.track.id, products: list }, (ev) => {
+      if (ev.type === "log") push(ev.msg, /✗|⛔|⚠/.test(ev.msg) ? "ln-err" : "");
+      else if (ev.type === "report") { state.report = ev.report; }
+      else if (ev.type === "error") push(`✗ ${ev.msg}`, "ln-err");
+    });
+  } catch (e) {
+    push(`✗ ${e.message}`, "ln-err");
+    return toast("调研中断，请查看日志");
+  }
+
+  if (!state.report) return toast("未拿到报告数据");
+  renderReport();
+  push(`完成，用时 ${Math.round((Date.now() - t0) / 1000)} 秒`);
+  setTimeout(() => { show("step-report"); window.scrollTo({ top: 0, behavior: "smooth" }); }, 500);
+}
+
+/* ── 步骤 4：报告 ──────────────────────────────────────────── */
+function renderReport() {
+  const r = state.report;
+  const s = r.summary;
+
+  $("report-title").textContent = `${r.track.name} · 赛道速览`;
+  $("report-meta").textContent =
+    `调研时间 ${new Date(r.generated_at).toLocaleString("zh-CN")} · ${r.products.length} 个产品 × ${state.cfg.fields.length} 个字段 · 用时 ${Math.round(r.elapsed_ms / 1000)} 秒`;
+
+  renderBanner();
+  renderStats();
+  renderConfidenceChart();
+  renderPriceChart();
+  renderTable();
+  renderGaps();
+}
+
+/* 主动服务钩子：把最容易出事的地方顶到最前面 */
+function renderBanner() {
+  const r = state.report, s = r.summary, b = $("banner");
+  const items = [];
+
+  if (s.unknown) items.push(`<div class="bn-item"><strong>${s.unknown} 个字段未找到公开来源</strong> —— 报告里显示为「未获取」，需要你人工确认或留空。见下方缺口清单。</div>`);
+  if (s.rejected) items.push(`<div class="bn-item"><strong>${s.rejected} 个字段被来源校验拦截</strong> —— 模型给出了值，但它声称的来源在这次检索中不存在，已判定为编造并降级。</div>`);
+
+  const stale = (r.recurring || []).filter((x) => r.products.some((p) => p.name === x.product));
+  for (const x of stale.slice(0, 3)) {
+    const f = state.cfg.fields.find((y) => y.key === x.field);
+    items.push(`<div class="bn-item"><strong>「${esc(x.product)}」的「${esc(f ? f.label : x.field)}」历史被改过 ${x.count} 次</strong> —— 该字段是高频错误点，请重点核对。</div>`);
+  }
+
+  if (!items.length) {
+    b.className = "banner ok";
+    b.innerHTML = `<div class="bn-title">✓ 本次没有发现缺口或来源冲突</div>
+      <div class="bn-item">所有字段都有可点开的来源。但这不代表内容一定正确 —— 仍建议抽查关键数字。</div>`;
+    b.hidden = false;
+    return;
+  }
+  b.className = "banner";
+  b.innerHTML = `<div class="bn-title">⚠ 拿到报告前，先看这几处不能信的地方</div>${items.join("")}`;
+  b.hidden = false;
+}
+
+function renderStats() {
+  const s = state.report.summary;
+  const tiles = [
+    { label: "字段槽位", value: s.total, sub: `${state.report.products.length} 产品 × ${state.cfg.fields.length} 字段`, dot: "" },
+    { label: "已核实", value: s.verified, sub: "有页面可点开", dot: "good" },
+    { label: "官方声明", value: s.claim, sub: "仅厂商自述", dot: "warning" },
+    { label: "未获取", value: s.unknown, sub: "公开渠道查不到", dot: "neutral" },
+    { label: "拦截的编造", value: s.rejected, sub: "来源对不上，已降级", dot: s.rejected ? "critical" : "" },
+  ];
+  $("stat-row").innerHTML = tiles.map((t) => `
+    <div class="stat">
+      <div class="s-label">${t.dot ? `<span class="dot ${t.dot}"></span>` : ""}${esc(t.label)}</div>
+      <div class="s-value">${t.value}</div>
+      <div class="s-sub">${esc(t.sub)}</div>
+    </div>`).join("");
+}
+
+/* 通用：水平条形容器 */
+function barLayout(n, rowH = 34) {
+  const W = 560, padTop = 6, labelW = 118, rightW = 82;
+  return { W, H: padTop * 2 + n * rowH, rowH, padTop, labelW, rightW, barW: W - labelW - rightW };
+}
+
+/* 图 1：可信度构成 —— 堆叠条，段间 2px 留缝，外端 4px 圆角，直接标数字 */
+function renderConfidenceChart() {
+  const r = state.report;
+  const keys = state.cfg.fields.map((f) => f.key);
+  const rows = r.products.map((p) => {
+    const c = { verified: 0, official_claim: 0, unknown: 0 };
+    for (const k of keys) { const cell = p.fields[k]; if (cell) c[cell.confidence]++; }
+    return { name: p.name, c, total: keys.length };
+  });
+
+  const L = barLayout(rows.length);
+  const barH = 17;
+  const segs = [
+    { key: "verified", fill: "var(--good)", label: "已核实" },
+    { key: "official_claim", fill: "var(--warning)", label: "官方声明" },
+    { key: "unknown", fill: "var(--neutral)", label: "未获取" },
+  ];
+
+  let svg = `<svg viewBox="0 0 ${L.W} ${L.H}" role="img" aria-label="每个产品的字段可信度构成">`;
+  svg += `<defs>`;
+  rows.forEach((row, i) => {
+    const y = L.padTop + i * L.rowH + (L.rowH - barH) / 2 - 3;
+    svg += `<clipPath id="cbar${i}"><rect x="${L.labelW}" y="${y}" width="${L.barW}" height="${barH}" rx="4"/></clipPath>`;
+  });
+  svg += `</defs>`;
+
+  rows.forEach((row, i) => {
+    const y = L.padTop + i * L.rowH + (L.rowH - barH) / 2 - 3;
+    svg += `<text x="${L.labelW - 12}" y="${y + barH / 2 + 4}" text-anchor="end" fill="var(--text-primary)">${esc(row.name)}</text>`;
+
+    let x = L.labelW;
+    svg += `<g clip-path="url(#cbar${i})">`;
+    segs.forEach((sg, si) => {
+      const n = row.c[sg.key];
+      if (!n) return;
+      const w = (n / row.total) * L.barW;
+      const isFirst = segs.slice(0, si).every((s2) => !row.c[s2.key]);
+      const isLast = segs.slice(si + 1).every((s2) => !row.c[s2.key]);
+      const gl = isFirst ? 0 : 1, gr = isLast ? 0 : 1;
+      svg += `<rect x="${x + gl}" y="${y}" width="${Math.max(w - gl - gr, 0.6)}" height="${barH}" fill="${sg.fill}">
+                <title>${esc(row.name)} · ${esc(sg.label || sg.key)}：${n} 个字段</title></rect>`;
+      x += w;
+    });
+    svg += `</g>`;
+
+    // 直接标签。数字必须自带色点 —— 否则「8 · 2」读者无从判断哪个数对应哪种颜色，
+    // 而这两种颜色的对比度都低于 3:1，颜色本身承担不了信息。
+    let lx = L.labelW + L.barW + 14;
+    const cy = y + barH / 2;
+    for (const sg of segs) {
+      const n = row.c[sg.key];
+      if (!n) continue;
+      svg += `<circle cx="${lx + 3.5}" cy="${cy}" r="3.5" fill="${sg.fill}"><title>${esc(sg.label)}</title></circle>`;
+      svg += `<text x="${lx + 11}" y="${cy + 4}" fill="var(--text-secondary)">${n}</text>`;
+      lx += 21;
+    }
+  });
+  svg += `</svg>`;
+  $("chart-confidence").innerHTML = svg;
+  const tEl = $("chart1-total"); if (tEl) tEl.textContent = rows.length * keys.length;
+
+  $("legend-confidence").innerHTML = [
+    { f: "var(--good)", n: "已核实", d: "有页面可点开" },
+    { f: "var(--warning)", n: "官方声明", d: "仅厂商自述" },
+    { f: "var(--neutral)", n: "未获取", d: "公开渠道查不到" },
+  ].map((x) => `<span class="lg"><span class="dot" style="background:${x.f}"></span>${x.n}<span style="color:var(--muted)">· ${x.d}</span></span>`).join("");
+}
+
+/* 图 2：起步月费 —— 单系列，无需图例（标题已命名） */
+function renderPriceChart() {
+  const r = state.report;
+  const rows = r.products.map((p) => {
+    const cell = p.fields.price_usd_month;
+    // 只用代码层已确认过的纯数值（cell.numeric），不在前端二次解析字符串 —— 避免把带单位/多数字的串读成一个错数
+    const n = cell && Number.isFinite(cell.numeric) ? cell.numeric
+            : (cell && /^\d+(\.\d+)?$/.test(String(cell.value || "")) ? Number(cell.value) : NaN);
+    return { name: p.name, v: n > 0 ? n : null, cell };
+  });
+  const withVal = rows.filter((x) => x.v !== null);
+
+  if (withVal.length < 2) {
+    $("chart-price").innerHTML = `<p style="color:var(--muted);font-size:13px;padding:22px 0">可明确折算成美元月费的产品不足 2 个，无法做价格对比。<br>这是诚实的结果，不做估算补齐。</p>`;
+    $("price-note").hidden = true;
+    return;
+  }
+
+  const L = barLayout(rows.length);
+  const max = Math.max(...withVal.map((x) => x.v));
+  const barH = 17;
+
+  let svg = `<svg viewBox="0 0 ${L.W} ${L.H}" role="img" aria-label="各产品起步月费对比">`;
+  // 基线
+  svg += `<line x1="${L.labelW}" y1="${L.padTop}" x2="${L.labelW}" y2="${L.H - L.padTop}" stroke="var(--baseline)" stroke-width="1"/>`;
+
+  rows.forEach((row, i) => {
+    const y = L.padTop + i * L.rowH + (L.rowH - barH) / 2 - 3;
+    svg += `<text x="${L.labelW - 12}" y="${y + barH / 2 + 4}" text-anchor="end" fill="var(--text-primary)">${esc(row.name)}</text>`;
+    if (row.v === null) {
+      svg += `<text x="${L.labelW + 10}" y="${y + barH / 2 + 4}" fill="var(--muted)" font-style="italic">未获取，不做估算</text>`;
+      return;
+    }
+    const w = Math.max((row.v / max) * (L.barW - 46), 3);
+    svg += `<rect x="${L.labelW + 2}" y="${y}" width="${w}" height="${barH}" rx="4" fill="var(--series-1)">
+              <title>${esc(row.name)}：${row.v}/月</title></rect>`;
+    svg += `<text x="${L.labelW + 2 + w + 9}" y="${y + barH / 2 + 4}" fill="var(--text-secondary)">${row.v}</text>`;
+  });
+  svg += `</svg>`;
+  $("chart-price").innerHTML = svg;
+
+  const skipped = rows.length - withVal.length;
+  const note = $("price-note");
+  note.hidden = false;
+  note.textContent = skipped
+    ? `有 ${skipped} 个产品未计入：官网定价无法在不做假设的前提下折算成美元月费。`
+    : "";
+}
+
+/* 对比表 */
+function renderTable() {
+  const r = state.report;
+  const fields = state.cfg.fields;
+  const conf = state.cfg.confidence;
+
+  let html = `<thead><tr><th>字段</th>`;
+  for (const p of r.products) {
+    html += `<th>${esc(p.name)}${p.vendor ? `<span class="th-vendor">${esc(p.vendor)}</span>` : ""}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+
+  for (const f of fields) {
+    html += `<tr><th scope="row">${esc(f.label)}</th>`;
+    for (const p of r.products) {
+      const c = p.fields[f.key] || { value: null, confidence: "unknown" };
+      const badge = conf[c.confidence] || conf.unknown;
+      const rejected = c.rejected;
+
+      let inner = c.value
+        ? `<span class="cell-val">${esc(c.value)}</span>`
+        : `<span class="cell-val empty">未获取</span>`;
+
+      let foot = `<div class="cell-foot"><span class="badge"><span class="dot ${c.confidence === "verified" ? "good" : c.confidence === "official_claim" ? "warning" : "neutral"}"></span>${esc(badge.label)}</span>`;
+      if (c.source_url) {
+        let host = c.source_url;
+        try { host = new URL(c.source_url).hostname.replace(/^www\./, ""); } catch {}
+        foot += `<a href="${esc(c.source_url)}" target="_blank" rel="noopener noreferrer" title="${esc(c.source_url)}">↗ ${esc(host)}</a>`;
+      }
+      foot += `</div>`;
+
+      html += `<td class="editable${rejected ? " flag-rejected" : ""}"
+                   data-product="${esc(p.name)}" data-field="${esc(f.key)}"
+                   data-value="${esc(c.value || "")}" data-url="${esc(c.source_url || "")}">
+                 ${inner}${foot}
+                 ${rejected ? `<span class="rejected-note">⛔ 来源校验不通过，已拦截。模型声称来自 ${esc(rejected.claimed_url)}（本次检索未出现），原值：${esc(rejected.value)}</span>` : ""}
+               </td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody>`;
+  $("compare-table").innerHTML = html;
+
+  $("compare-table").querySelectorAll("td.editable").forEach((td) => {
+    td.addEventListener("click", (e) => {
+      if (e.target.tagName === "A") return;
+      openEditor(td);
+    });
+  });
+}
+
+/* 缺口清单 */
+function renderGaps() {
+  const r = state.report;
+  const fields = state.cfg.fields;
+  const rows = [];
+
+  for (const f of fields) {
+    const missing = r.products.filter((p) => !(p.fields[f.key] || {}).value);
+    if (!missing.length) continue;
+    rows.push(`
+      <div class="gap-row">
+        <span class="g-field">${esc(f.label)}</span>
+        <span class="g-missing">${missing.map((p) => esc(p.name)).join(" · ")} <em>未获取</em></span>
+        <span class="chip">${missing.length}/${r.products.length} 个产品缺失</span>
+      </div>`);
+  }
+
+  $("gap-list").innerHTML = rows.length
+    ? rows.join("")
+    : `<div class="gap-row"><span class="g-missing">本次全部字段都找到了来源。<em>仍建议抽查关键数字。</em></span></div>`;
+}
+
+/* ── 校正编辑器（自进化钩子入口）───────────────────────────── */
+const REASONS = ["定价错误", "功能描述错误", "不适用该产品", "信息已过时", "来源不可信"];
+
+function openEditor(td) {
+  document.querySelector(".editor")?.remove();
+
+  const product = td.dataset.product, fieldKey = td.dataset.field;
+  const f = state.cfg.fields.find((x) => x.key === fieldKey);
+  const ed = document.createElement("div");
+  ed.className = "editor";
+  ed.innerHTML = `
+    <h4>${esc(product)} · ${esc(f ? f.label : fieldKey)}</h4>
+    <div class="ed-sub">AI 原值：${td.dataset.value ? esc(td.dataset.value) : "（未获取）"}</div>
+    <label for="ed-val">改成什么（留空 = 确认为「未获取」）</label>
+    <input type="text" id="ed-val" value="${esc(td.dataset.value)}">
+    <label>修改原因</label>
+    <div class="ed-reasons">${REASONS.map((x) => `<button type="button" class="reason" aria-pressed="false">${x}</button>`).join("")}</div>
+    <div class="ed-actions">
+      <button type="button" class="btn ghost" data-act="cancel">取消</button>
+      <button type="button" class="btn primary" data-act="save">保存并记录</button>
+    </div>`;
+
+  document.body.appendChild(ed);
+  const rect = td.getBoundingClientRect();
+  const top = rect.bottom + 8 + 250 > window.innerHeight ? Math.max(8, rect.top - 258) : rect.bottom + 8;
+  ed.style.top = `${Math.max(8, top)}px`;
+  ed.style.left = `${Math.min(Math.max(8, rect.left), window.innerWidth - 346)}px`;
+
+  let reason = "";
+  ed.querySelectorAll(".reason").forEach((b) => b.addEventListener("click", () => {
+    ed.querySelectorAll(".reason").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    reason = b.textContent;
+  }));
+  ed.querySelector("#ed-val").focus();
+
+  const close = () => ed.remove();
+  ed.addEventListener("click", (e) => e.stopPropagation());
+  setTimeout(() => document.addEventListener("click", close, { once: true }), 0);
+
+  ed.querySelector('[data-act="cancel"]').addEventListener("click", close);
+  ed.querySelector('[data-act="save"]').addEventListener("click", async () => {
+    if (!reason) return toast("请选一个修改原因");
+    const newVal = ed.querySelector("#ed-val").value.trim();
+    const rec = {
+      product, field: fieldKey,
+      ai_value: td.dataset.value, new_value: newVal, reason,
+      source_url: td.dataset.url,
+    };
+
+    let total, recurring;
+    try {
+      if (DEMO) {
+        total = store.add(rec);
+        recurring = store.recurring();
+      } else {
+        const res = await fetch("/api/correct", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rec),
+        });
+        const data = await res.json();
+        total = data.corrections; recurring = data.recurring;
+      }
+    } catch (e) { return toast(`记录失败：${e.message}`); }
+
+    close();
+    toast(`已记录：${product} · ${f ? f.label : fieldKey}（累计 ${total} 条校正）`);
+
+    // 本地立即反映，不必重跑调研
+    const cell = state.report.products.find((p) => p.name === product)?.fields[fieldKey];
+    if (cell) {
+      cell.value = newVal || null;
+      if (newVal && !cell.source_url) cell.confidence = "official_claim";
+      renderTable();
+    }
+
+    // 自进化钩子：同产品同字段改满 2 次 → 当场升级为高频错误点，横幅立即更新
+    if (recurring?.some((x) => x.product === product && x.field === fieldKey)) {
+      state.report.recurring = recurring;
+      renderBanner();
+      toast(`「${product} · ${f ? f.label : fieldKey}」已升级为高频错误点 —— 见顶部横幅`, 4600);
+    }
+  });
+}
+
+/* ── 流程控制 ──────────────────────────────────────────────── */
+function show(id) {
+  ["step-track", "step-products", "step-progress", "step-report"].forEach((s) => { $(s).hidden = s !== id; });
+}
+
+function restart() {
+  state.track = null; state.products = []; state.report = null;
+  $("track-grid").querySelectorAll(".track-card").forEach((b) => b.setAttribute("aria-pressed", "false"));
+  show("step-track");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* ── 主题 ─────────────────────────────────────────────────── */
+function initTheme() {
+  const saved = localStorage.getItem("radar-theme");
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  $("theme-toggle").addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const isDark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    const next = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("radar-theme", next);
+    if (state.report) { renderConfidenceChart(); renderPriceChart(); }
+  });
+}
+
+/* ── 启动 ─────────────────────────────────────────────────── */
+(async function init() {
+  initTheme();
+  $("btn-run").addEventListener("click", run);
+  $("btn-add-product").addEventListener("click", addProduct);
+  $("btn-restart").addEventListener("click", restart);
+
+  // ── 配置来源：演示版从内联数据取，联网版从后端取 ──
+  if (DEMO) {
+    state.cfg = DEMO.config;
+    document.body.classList.add("is-demo");
+    const n = Object.keys(DEMO.reports || {}).length;
+    $("foot-endpoint").textContent =
+      `演示版 · 内含 ${n} 份真实调研报告 · ${state.cfg.fields.length} 个字段 · 无后端、无密钥、离线可用`;
+    // 校正记录导出改成浏览器内生成，不依赖服务器
+    const a = $("corrections-link");
+    if (a) {
+      a.removeAttribute("href");
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const blob = new Blob([store.csv()], { type: "text/csv;charset=utf-8" });
+        const u = URL.createObjectURL(blob);
+        const t = document.createElement("a");
+        t.href = u; t.download = "corrections.csv"; t.click();
+        setTimeout(() => URL.revokeObjectURL(u), 1000);
+      });
+    }
+    if (DEMO.note) {
+      const d = document.createElement("div");
+      d.className = "demo-note";
+      d.innerHTML = DEMO.note;
+      document.querySelector(".app").prepend(d);
+    }
+  } else {
+    try {
+      state.cfg = await (await fetch("/api/config")).json();
+      $("foot-endpoint").textContent = `${state.cfg.fields.length} 个字段 · ${state.cfg.tracks.length} 条赛道 · 数据源：公开网页`;
+    } catch (e) {
+      toast("无法连接后端，请确认 server.mjs 已启动");
+      return;
+    }
+  }
+
+  renderTracks();
+
+  // 演示版：打开即载入第一份报告，不让访客面对一个空页面。
+  // 想看别的赛道点右上角「↺ 换一条赛道」。
+  if (DEMO) {
+    const first = state.cfg.tracks.find((t) => DEMO.reports[t.id]);
+    if (first) {
+      state.track = first;
+      const card = $("track-grid").querySelector(`.track-card[data-id="${first.id}"]`);
+      if (card) card.setAttribute("aria-pressed", "true");
+      loadDemoReport(first.id);
+      return;
+    }
+  }
+
+  // 联网版：?report=last 回到上一次调研结果（刷新不丢）
+  if (!DEMO && new URLSearchParams(location.search).get("report") === "last") {
+    try {
+      const r = await (await fetch("/api/last-report")).json();
+      if (r.report) {
+        state.report = r.report;
+        state.track = state.cfg.tracks.find((t) => t.id === r.report.track.id) || null;
+        renderReport();
+        show("step-report");
+        return;
+      }
+    } catch {}
+    toast("还没有可查看的报告，请先跑一次调研");
+  }
+})();
+
+</script>
+</body>
+</html>
