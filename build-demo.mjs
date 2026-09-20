@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TRACKS, FIELDS, CONFIDENCE } from "./lib/schema.mjs";
+import { GRADES, gradeReport } from "./lib/source-grade.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -27,8 +28,17 @@ for (const s of SOURCES) {
   if (!line) { console.warn(`  ! 跳过（无 report 事件）: ${s.file}`); continue; }
   const r = JSON.parse(line);
   delete r.recurring;               // 演示版从 localStorage 现算，不烘焙历史
+
+  // 来源分级是 source_url 的纯函数 → 对历史语料**回溯应用**，
+  // 不用为了拿到等级去重跑一遍调研。
+  r.products = gradeReport(r.products);
+  let weak = 0, tot = 0;
+  for (const p of r.products) for (const c of Object.values(p.fields || {})) {
+    if (c.value && c.source_grade) { tot++; if (!c.source_adequate) weak++; }
+  }
+
   reports[s.trackId] = r;
-  baked.push(`${s.trackId}  ←  ${s.label}  (${r.summary.total} 槽位, 拦截编造 ${r.summary.rejected})`);
+  baked.push(`${s.trackId}  ←  ${s.label}  (${r.summary.total} 槽位, 拦截编造 ${r.summary.rejected}, 来源不够格 ${weak}/${tot})`);
 }
 
 if (!Object.keys(reports).length) {
@@ -40,11 +50,12 @@ if (!Object.keys(reports).length) {
 // ── 2. 组装演示数据 ─────────────────────────────────────────
 const reportList = baked.map((b) => b.split("  ←  ")[1].split("  (")[0]);
 const demoData = {
-  config: { tracks: TRACKS, fields: FIELDS, confidence: CONFIDENCE },
+  config: { tracks: TRACKS, fields: FIELDS, confidence: CONFIDENCE, grades: GRADES },
   reports,
   note: `<strong>这是演示版，不是空壳。</strong>页面里 ${Object.keys(reports).length} 份报告都是<strong>真实联网调研跑出来的原始结果</strong>（${reportList.join("、")}），数据<strong>未经人工修饰</strong>——包括模型答得含糊的地方和查不到的字段。<br>
         <strong>动手试一下：</strong>点表格里任意一格就能改数据、选修改原因。同一个字段改满 <strong>2 次</strong>，它会当场升级为「高频错误点」并出现在顶部横幅——这是自进化钩子的真实行为，记录存在你浏览器本地，不联网。<br>
         <strong>关于「拦截的编造」为什么显示 0：</strong>0 才是目标值。它的机制是——模型每给出一个来源 URL，代码都会拿去和本次检索真实返回的 URL 集合比对，对不上就判定为编造、清空该值并降级为「未获取」。实测中确实拦截到过，例如模型给 Fathom 的「起步价」标注来源 <code>comparedge.com</code>，而该 URL 在本次检索结果里从未出现。<br>
+        <strong>注意表格里的来源等级徽章：</strong>URL 能点开 <strong>≠</strong> 够格支撑这条事实。每个来源都被定级，标红的「广告 / 聚合」意味着这个链接真实存在、但内容来自投放落地页或对比目录站，不足以作为事实依据。<strong>这个演示页里超过四成的引用属于此类</strong>——这不是演示版的缺陷，是联网调研这件事的真实底色。<br>
         <strong>演示版不含：</strong>实时调研新赛道（需要后端持有 API 密钥，且浏览器直连多数 API 会被跨域拦截）。完整版用 <code>npm start</code> 启动。`,
 };
 

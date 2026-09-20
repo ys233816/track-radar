@@ -210,6 +210,11 @@ function renderBanner() {
   if (s.unknown) items.push(`<div class="bn-item"><strong>${s.unknown} 个字段未找到公开来源</strong> —— 报告里显示为「未获取」，需要你人工确认或留空。见下方缺口清单。</div>`);
   if (s.rejected) items.push(`<div class="bn-item"><strong>${s.rejected} 个字段被来源校验拦截</strong> —— 模型给出了值，但它声称的来源在这次检索中不存在，已判定为编造并降级。</div>`);
 
+  const w = weakCitations();
+  if (w.weak) {
+    items.push(`<div class="bn-item"><strong>${w.weak} 个引用不够格支撑它所在的字段</strong> —— 这些链接<strong>能点开、也真实存在</strong>，但可能是广告落地页、聚合目录站，或价格取自营销博客。表格里标红为「广告 / 聚合」的格子就是。见下方来源分级说明。</div>`);
+  }
+
   const stale = (r.recurring || []).filter((x) => r.products.some((p) => p.name === x.product));
   for (const x of stale.slice(0, 3)) {
     const f = state.cfg.fields.find((y) => y.key === x.field);
@@ -228,14 +233,29 @@ function renderBanner() {
   b.hidden = false;
 }
 
+// 统计「来源不够格支撑其字段」的引用数（分级是纯函数，前端直接算）
+function weakCitations() {
+  let weak = 0, total = 0;
+  for (const p of state.report.products) {
+    for (const c of Object.values(p.fields || {})) {
+      if (!c.value || !c.source_grade) continue;
+      total++;
+      if (c.source_adequate === false) weak++;
+    }
+  }
+  return { weak, total };
+}
+
 function renderStats() {
   const s = state.report.summary;
+  const w = weakCitations();
   const tiles = [
     { label: "字段槽位", value: s.total, sub: `${state.report.products.length} 产品 × ${state.cfg.fields.length} 字段`, dot: "" },
     { label: "已核实", value: s.verified, sub: "有页面可点开", dot: "good" },
     { label: "官方声明", value: s.claim, sub: "仅厂商自述", dot: "warning" },
     { label: "未获取", value: s.unknown, sub: "公开渠道查不到", dot: "neutral" },
     { label: "拦截的编造", value: s.rejected, sub: "来源对不上，已降级", dot: s.rejected ? "critical" : "" },
+    { label: "来源不够格", value: w.weak, sub: `共 ${w.total} 个有源引用 · 广告页/聚合站等`, dot: w.weak ? "critical" : "good" },
   ];
   $("stat-row").innerHTML = tiles.map((t) => `
     <div class="stat">
@@ -392,10 +412,19 @@ function renderTable() {
         : `<span class="cell-val empty">未获取</span>`;
 
       let foot = `<div class="cell-foot"><span class="badge"><span class="dot ${c.confidence === "verified" ? "good" : c.confidence === "official_claim" ? "warning" : "neutral"}"></span>${esc(badge.label)}</span>`;
+
       if (c.source_url) {
         let host = c.source_url;
         try { host = new URL(c.source_url).hostname.replace(/^www\./, ""); } catch {}
         foot += `<a href="${esc(c.source_url)}" target="_blank" rel="noopener noreferrer" title="${esc(c.source_url)}">↗ ${esc(host)}</a>`;
+
+        // 来源等级：URL 能点开 ≠ 够格支撑这条事实。
+        // 不够格的引用直接标红，不用等读者自己去判断域名。
+        const g = c.source_grade && (state.cfg.grades || {})[c.source_grade.id];
+        if (g) {
+          const weak = c.source_adequate === false;
+          foot += `<span class="grade${weak ? " weak" : ""}" title="${esc(g.desc)}${weak ? " —— 这个来源不足以支撑本字段" : ""}">${esc(g.short)}</span>`;
+        }
       }
       foot += `</div>`;
 

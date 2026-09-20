@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TRACKS, FIELDS, CONFIDENCE, summarize, FIELD_KEYS } from "./lib/schema.mjs";
+import { GRADES } from "./lib/source-grade.mjs";
 import { discoverProducts, runResearch } from "./lib/research.mjs";
 import { appendCorrection, loadCorrections, recurringIssues, ensureStore, CSV } from "./lib/store.mjs";
 
@@ -72,7 +73,7 @@ const server = http.createServer(async (req, res) => {
 
     // ── 配置 ─────────────────────────────────────────────────
     if (req.method === "GET" && p === "/api/config") {
-      return json(res, 200, { tracks: TRACKS, fields: FIELDS, confidence: CONFIDENCE });
+      return json(res, 200, { tracks: TRACKS, fields: FIELDS, confidence: CONFIDENCE, grades: GRADES });
     }
 
     // ── 上次报告 ─────────────────────────────────────────────

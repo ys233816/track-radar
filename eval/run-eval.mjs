@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FIELD_KEYS, summarize } from "../lib/schema.mjs";
+import { gradeSource, isAdequate, GRADES } from "../lib/source-grade.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CORPUS = path.join(ROOT, "eval", "corpus");
@@ -53,6 +54,8 @@ for (const r of runs) {
 function metricsFor(rs) {
   const s = [];
   let ad = 0, frag = 0, vs = 0, viol = 0, pv = 0, ps = 0, rej = 0, blank = 0, withReason = 0;
+  let weak = 0;
+  const gradeCount = {};
   for (const run of rs) {
     rej += run.summary.rejected || 0;
     for (const p of run.products) {
@@ -66,6 +69,10 @@ function metricsFor(rs) {
           vs++;
           if (isAdLike(c.source_url)) ad++;
           else if (isFragment(c.source_url)) frag++;
+          // 来源分级：纯函数，可回溯应用到历史语料
+          const g = gradeSource(c.source_url, { product: p.name, vendor: p.vendor });
+          gradeCount[g.id] = (gradeCount[g.id] || 0) + 1;
+          if (!isAdequate(k, g.id)) weak++;
         }
       }
     }
@@ -81,6 +88,8 @@ function metricsFor(rs) {
     fragment_rate: vs ? +(frag / vs * 100).toFixed(2) : 0,
     blank, blank_with_reason: withReason,
     reason_coverage: blank ? +(withReason / blank * 100).toFixed(1) : 0,
+    gradeCount, weak_citations: weak,
+    weak_rate: vs ? +(weak / vs * 100).toFixed(2) : 0,
   };
 }
 
@@ -157,6 +166,20 @@ for (const run of runs) for (const p of run.products) {
   const hs = new Set(FIELD_KEYS.map((k) => host((p.fields[k] || {}).source_url)).filter(Boolean));
   if (hs.size === 1 && FIELD_KEYS.filter((k) => (p.fields[k] || {}).value).length >= 5) M.single_domain_products++;
 }
+
+// ── L4-B′ 来源分级（新增维度）────────────────────────────────
+// 分级是 source_url 的纯函数 —— 同一套规则可回溯应用到历史语料，
+// 所以这个维度能覆盖全部 7 轮，不需要重跑调研。
+M.gradeCount = {};
+M.graded_total = 0;
+M.weak_citations = 0;
+for (const s of valued) {
+  const g = gradeSource(s.source_url, { product: s.product, vendor: s.vendor });
+  M.gradeCount[g.id] = (M.gradeCount[g.id] || 0) + 1;
+  M.graded_total++;
+  if (!isAdequate(s.field, g.id)) M.weak_citations++;
+}
+M.weak_rate = +(M.weak_citations / (M.graded_total || 1) * 100).toFixed(2);
 
 // ── L4-E 缺口识别（降级必须带理由，不许静默丢值）─────────────
 M.blank_slots = slots.filter((s) => !s.value).length;
@@ -247,13 +270,30 @@ L.push("> 加了「推导字段必须与依据字段同源」这条不变量后�
 L.push("> 这是**有意的取舍**：宁可不给数字，也不给一个两个来源互相打架的数字。");
 L.push("> **但必须同时说明**：v1 只有 " + v1.runs + " 轮样本，方向可信、幅度不可信。\n");
 
-L.push("## 三、来源域名分布（Top 12）\n");
+L.push("## 三、来源分级（L4-B′）\n");
+L.push("URL 校验只能判断「链接真的存在」，判断不了「它够不够格支撑这条事实」。分级是对 `source_url` 的**纯函数**，因此能回溯应用到全部历史语料，不需要重跑调研。\n");
+L.push("| 等级 | 含义 | 条数 | 占比 |");
+L.push("|---|---|---:|---:|");
+for (const id of ["T1", "T2", "T3", "T4", "T5", "T6"]) {
+  const n = M.gradeCount[id] || 0;
+  L.push(`| ${id} | ${GRADES[id].label} — ${GRADES[id].desc} | ${n} | ${(n / M.graded_total * 100).toFixed(1)}% |`);
+}
+L.push("");
+L.push(`**不够格支撑其字段的引用：${M.weak_citations} / ${M.graded_total} = ${M.weak_rate}%**\n`);
+L.push("判定规则（代码，非 prompt）：");
+L.push("- **T5 聚合目录站 / T6 广告落地页 → 对任何字段都不够格**。它们能通过 URL 校验，但信息是转述或营销投放");
+L.push("- **价格类字段不接受 T3（官网首页/博客）**。这类页面上的价格常是引流话术、档位不全或已过时");
+L.push("- 价格类字段接受 T1 定价页 / T2 官方文档 / T4 第三方评测；其余字段 T1–T4 均可");
+L.push("");
+L.push("> ⚠️ 已知假阳性边界：官方定价页带联盟参数（`?fpr=`）仍判 T1，因为页面内容是真实定价页。这类参数不在投放跟踪清单里。\n");
+
+L.push("## 四、来源域名分布（Top 12）\n");
 L.push("| 域名 | 被引次数 |");
 L.push("|---|---:|");
 for (const [h, c] of Object.entries(domainCount).sort((a, b) => b[1] - a[1]).slice(0, 12)) L.push(`| ${h} | ${c} |`);
 L.push("");
 
-L.push("## 四、L4-A 内容命中（人工标注）\n");
+L.push("## 五、L4-A 内容命中（人工标注）\n");
 L.push("这是本评测中唯一需要主观判断的维度。**标注者是 AI 助手本人，不是领域专家**——写进材料时必须如实说明。\n");
 L.push("### 主样本：无偏等距抽样\n");
 L.push(`从全部 **${M.valued_with_source} 个有值且带来源的槽位**中等距抽取 ${A_primary.n} 条，**不按成败预筛**。\n`);
@@ -275,19 +315,19 @@ L.push("### 对照样本：「高频常规」桶\n");
 L.push(`该桶的定义就是「有值且通过校验」，**存在选择性偏置**，因此单列、不参与主指标：${A_control.n} 条中 ${A_control.s3} 条得 3 分（${A_control.usable}%）。`);
 L.push("这个接近满分的结果是**结构性的**——在一开始就筛过成功的集合里测成功率，不构成证据。记录下来是为了说明：**评测集的构造方式会直接决定结论**。\n");
 
-L.push("## 五、需人工判定的维度（尚未评分）\n");
+L.push("## 六、需人工判定的维度（尚未评分）\n");
 L.push("| 维度 | 判断问题 | 状态 | 数据在哪 |");
 L.push("|---|---|---|---|");
 for (const [d, q, st, where] of MANUAL) L.push(`| ${d} | ${q} | **${st}** | ${where} |`);
 L.push("");
 L.push("> 上面这些**没有数字**，因为它们需要人读内容后判断。填入 `eval/cases.csv` 对应列后重跑本脚本即可纳入。\n");
 
-L.push("## 六、口径与复现\n");
+L.push("## 七、口径与复现\n");
 L.push("- 语料：`eval/corpus/*.ndjson`，全部为真实联网调研的原始输出，未经修改");
 L.push("- 样本：`eval/build-cases.mjs` 用**确定性等距抽样**（不含随机数），任何人重跑得到同一批 45 条");
 L.push("- 本脚本：`node eval/run-eval.mjs`，纯计算，不调用任何模型");
 L.push("- **不含任何线上指标**——无真实用户、无埋点、无对照\n");
-L.push("## 七、不能从本报告得出的结论\n");
+L.push("## 八、不能从本报告得出的结论\n");
 L.push(`- 不能把 L4-A 的 ${A_primary.usable}% 当成稳定准确率——只标了 ${A_primary.n} 条，一个 case 就值 ${(100 / A_primary.n).toFixed(1)} 个百分点`);
 L.push("- 不能推出「用户满意度」——没有真实用户、没有埋点、没有对照");
 L.push("- 不能推出「修复后整体变好」——同源违反确实降到 0，但**价格覆盖率同时从 " + v0.price_coverage + "% 降到 " + v1.price_coverage + "%**，这是取舍不是提升");
@@ -310,6 +350,11 @@ console.log(`  分片锚点（噪声）    ${M.fragment_rate}%   (${M.sources_fr
 console.log(`  空值带理由覆盖率    ${M.reason_coverage}%`);
 console.log(`  来源域名数          ${M.unique_domains}`);
 console.log(`  单域名垄断产品      ${M.single_domain_products}`);
+
+console.log("\n═══ 来源分级（L4-B′）═══");
+console.log(`  不够格支撑其字段的引用  ${M.weak_citations}/${M.graded_total} = ${M.weak_rate}%`);
+console.log("  等级分布  " + ["T1", "T2", "T3", "T4", "T5", "T6"]
+  .map((id) => `${id}:${M.gradeCount[id] || 0}`).join("  "));
 
 console.log("\n═══ 修复前后（分组对比，不混算）═══");
 const row = (l, a, b, u) => console.log(`  ${l.padEnd(18)} v0 ${String(a).padStart(6)}${u}   →   v1 ${String(b).padStart(6)}${u}`);
