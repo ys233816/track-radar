@@ -9,3 +9,6 @@ _*.html
 _*.png
 _*.json
 *.ndjson.new
+
+# 面试工作材料，不进公开仓库
+INTERVIEW-PREP.md
