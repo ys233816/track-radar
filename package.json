@@ -9,7 +9,7 @@
   "description": "AI 赛道可比信息抽取器",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test/invariants.mjs && node test/source-grade.mjs",
+    "test": "node test/invariants.mjs && node test/source-grade.mjs && node test/docs-numbers.mjs",
     "build:demo": "node build-demo.mjs",
     "eval": "node eval/build-cases.mjs && node eval/run-eval.mjs"
   }

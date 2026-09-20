@@ -44,8 +44,12 @@ const runs = loadCorpus();
 
 // ── 版本分组：修复前 / 修复后分开算，不混在一起求平均 ─────────
 const VERSIONS = JSON.parse(fs.readFileSync(path.join(CORPUS, "versions.json"), "utf8"));
-const versionOf = (file) =>
-  VERSIONS.v0.runs.includes(file) ? "v0" : VERSIONS.v1.runs.includes(file) ? "v1" : null;
+const versionOf = (file) => {
+  for (const key of ["v0", "v1", "v2"]) {
+    if (VERSIONS[key] && VERSIONS[key].runs.includes(file)) return key;
+  }
+  return null;
+};
 for (const r of runs) {
   r.version = versionOf(r.file);
   if (!r.version) console.log(`  ! ${r.file} 未在 versions.json 中标记版本，已排除出对比`);
@@ -95,6 +99,7 @@ function metricsFor(rs) {
 
 const v0 = metricsFor(runs.filter((r) => r.version === "v0"));
 const v1 = metricsFor(runs.filter((r) => r.version === "v1"));
+const v2 = metricsFor(runs.filter((r) => r.version === "v2"));
 
 // ── 全语料逐槽位展开 ─────────────────────────────────────────
 const slots = [];
@@ -181,6 +186,29 @@ for (const s of valued) {
 }
 M.weak_rate = +(M.weak_citations / (M.graded_total || 1) * 100).toFixed(2);
 
+// ── L4-B″ 自纠错闭环：重新取证的效果 ─────────────────────────
+// 只有跑过补证的新语料才有这两个数；历史语料为 0。
+M.retry_rescued = 0;
+M.retry_dropped = 0;
+M.retry_triggered = 0;
+M.retry_products = 0;
+M.retry_value_coverage_before = 0;
+M.retry_value_coverage_after = 0;
+for (const run of runs) for (const p of run.products) {
+  if (p._retry) {
+    M.retry_triggered += p._retry.triggered;
+    M.retry_rescued += p._retry.rescued;
+    M.retry_dropped += p._retry.dropped;
+    if (p._retry.triggered) M.retry_products++;
+    // 覆盖率变化：补证会救回一些、也会降级一些，两个数必须一起报
+    const valued = FIELD_KEYS.filter((k) => (p.fields[k] || {}).value).length;
+    M.retry_value_coverage_after += valued;
+    M.retry_value_coverage_before += valued + p._retry.dropped;
+  }
+}
+M.retry_success_rate = (M.retry_rescued + M.retry_dropped)
+  ? +(M.retry_rescued / (M.retry_rescued + M.retry_dropped) * 100).toFixed(1) : null;
+
 // ── L4-E 缺口识别（降级必须带理由，不许静默丢值）─────────────
 M.blank_slots = slots.filter((s) => !s.value).length;
 M.downgraded_with_reason = slots.filter((s) => s.downgraded).length;
@@ -262,6 +290,18 @@ cmp("编造率", v0.fab_rate, v1.fab_rate, "%", "两版都靠同一套来源校�
 cmp("广告/跟踪页占比", v0.adlike_rate, v1.adlike_rate, "%", "**未修**——来源分级还没做，这是已知缺口");
 cmp("空值带理由覆盖率", v0.reason_coverage, v1.reason_coverage, "%", "静默丢值比丢值本身更危险");
 L.push("");
+if (v2.runs) {
+  L.push("### v1 → v2：补证闭环带来的变化\n");
+  L.push("| 指标 | v1 不变量生效 | v2 加入补证闭环 | 怎么读 |");
+  L.push("|---|---:|---:|---|");
+  L.push(`| 不够格引用占比 | ${v1.weak_rate}% | **${v2.weak_rate}%** | **降到 0 是设计使然**——不够格的要么被救回、要么被降级；见下方警告 |`);
+  L.push(`| 字段值覆盖率 | ${(v1.valued_with_source / (v1.slots || 1) * 100).toFixed(1)}% | ${(v2.valued_with_source / (v2.slots || 1) * 100).toFixed(1)}% | ⚠️ **这是补证的代价**，必须和上面一起报 |`);
+  L.push(`| 空值带理由覆盖率 | ${v1.reason_coverage}% | ${v2.reason_coverage}% | 降级都带理由，静默丢值没有增加 |`);
+  L.push("");
+  L.push(`> ⚠️ **v2 的「不够格引用归零」不是能力提升，是口径变化**——不够格的引用被**删掉了**，不是被**修好了**。`);
+  L.push(`> 只报前者不报后者，读者会以为来源质量变好了。**字段值覆盖率的同时下降就是代价的收据。**`);
+  L.push(`> v2 组只有 ${v2.runs} 轮 / ${v2.slots} 槽位，产品间方差极大，**只能看方向**。\n`);
+}
 L.push(`> 样本量：v0 = ${v0.runs} 轮 / ${v0.slots} 槽位；v1 = ${v1.runs} 轮 / ${v1.slots} 槽位。`);
 L.push("> **v1 样本量远小于 v0，这个对比只能看方向，不能当结论。** 要下结论需要把 v1 补到同等规模。\n");
 L.push("### 怎么读这张表（面试要能讲的版本）\n");
@@ -286,6 +326,35 @@ L.push("- **价格类字段不接受 T3（官网首页/博客）**。这类页�
 L.push("- 价格类字段接受 T1 定价页 / T2 官方文档 / T4 第三方评测；其余字段 T1–T4 均可");
 L.push("");
 L.push("> ⚠️ 已知假阳性边界：官方定价页带联盟参数（`?fpr=`）仍判 T1，因为页面内容是真实定价页。这类参数不在投放跟踪清单里。\n");
+
+L.push("### 自纠错闭环：重新取证的效果（L4-B″）\n");
+if (!M.retry_triggered) {
+  L.push("**本语料尚未包含补证数据。** 现有 7 轮语料跑在补证功能上线之前，因此这一维度为空。");
+  L.push("补证会改变字段值与覆盖率，**不能用旧语料倒推**——需要跑出新语料后本表才会填上。\n");
+  L.push("离线预演（按真实语料模拟「补证全失败」的最坏情况）：");
+  const worstDrop = M.weak_citations;
+  L.push(`- 触发补证的字段：${M.weak_citations} 个（即全部不够格引用）`);
+  L.push(`- 若补证全部失败 → 这些字段全部降级为「未获取」`);
+  L.push(`- 字段值覆盖将从 ${M.graded_total} 降到 ${M.graded_total - worstDrop}（${((M.graded_total - worstDrop) / M.graded_total * 100).toFixed(1)}%）\n`);
+  L.push("> ⚠️ **覆盖率下降是这个功能的直接代价，必须和成功率一起报**。只报「救回多少」而不报「掉下去多少」，就是选择性陈述。\n");
+} else {
+  L.push("| 指标 | 实测 |");
+  L.push("|---|---:|");
+  L.push(`| 进入补证的**产品数** | ${M.retry_products} |`);
+  L.push(`| 触发补证的**字段数** | ${M.retry_triggered} |`);
+  L.push(`| 补证救回（新来源够格） | ${M.retry_rescued} |`);
+  L.push(`| 补证失败 → 降级为「未获取」 | ${M.retry_dropped} |`);
+  L.push(`| **补证成功率** | **${M.retry_success_rate}%** |`);
+  L.push("");
+  L.push("规则：不够格的来源先**定向重搜一次**（系统提示里明确禁止拿原来源充数）→ 仍不够格则**降级为「未获取」**。\n");
+  L.push("> **统计口径**：只计入账目正确的轮次。更早的一轮（r08）跑在补证计数逻辑修正之前，它记录的「救回」统计的是「拿到了新值」而非「新来源够格」，会把降级前的新值也算成救回——那个数据不可信，已排除。它的字段数据仍参与其他维度。\n");
+  L.push("#### 这个数字要带着三个警告读\n");
+  L.push(`1. **样本极小**：只来自 ${M.retry_products} 个产品的 ${M.retry_triggered} 个字段。`);
+  L.push("2. **产品间方差极大**：同一轮里 Grammarly 救回 6/6，Jasper 只救回 1/6。用平均值描述它是不诚实的——它取决于**这个产品的广告投放有多激进**。");
+  L.push("3. **补证常常白跑**：模型被告知「不许拿原来源充数」后，实测**多次换成了另一个同样是广告的页面**（例如把 `jasper.ai` 的首页广告链接换成了 `jasper.ai/platform?gclid=...`）。原因是**广告落地页和聚合站在搜索结果里排名本来就很靠前**——不是模型不听话，是它搜到的东西就这些。");
+  L.push("");
+  L.push("> 只报成功率而不报这条，就是在把「搜不到更好来源」包装成「系统在自我改进」。\n");
+}
 
 L.push("## 四、来源域名分布（Top 12）\n");
 L.push("| 域名 | 被引次数 |");
@@ -338,6 +407,26 @@ L.push("- 人工标注者是 AI 助手，非领域专家，**未做标注者间�
 
 const md = L.join("\n") + "\n";
 fs.writeFileSync(path.join(ROOT, "eval", "report.md"), md, "utf8");
+
+// ── 权威数字输出 ─────────────────────────────────────────────
+// README / RESUME / JOURNAL 里引用的数字必须与这里对齐。
+// test/docs-numbers.mjs 会拿这份文件去校验文档，防止语料增长后文档数字过期。
+const round = (n, d = 2) => Number(n.toFixed(d));
+fs.writeFileSync(path.join(ROOT, "eval", "key-numbers.json"), JSON.stringify({
+  _说明: "由 eval/run-eval.mjs 生成，是文档中数字的唯一权威来源。不要手工编辑。",
+  _语料指纹: fileHashes,
+  语料轮数: runs.length,
+  槽位总数: M.slots_total,
+  编造率: { 值: round(M.fabrication_rate), 分子: M.rejected, 分母: M.slots_total },
+  不够格引用: { 值: round(M.weak_rate), 分子: M.weak_citations, 分母: M.graded_total },
+  有值槽位: M.valued_with_source,
+  补证成功率: M.retry_success_rate,
+  补证: { 触发: M.retry_triggered, 救回: M.retry_rescued, 降级: M.retry_dropped, 产品数: M.retry_products },
+  覆盖率_v1到v2: { v1: round(v1.valued_with_source / (v1.slots || 1) * 100, 1), v2: round(v2.valued_with_source / (v2.slots || 1) * 100, 1) },
+  同源违反: { v0: v0.same_source_violations, v1: v1.same_source_violations },
+  价格覆盖率: { v0: v0.price_coverage, v1: v1.price_coverage },
+  L4A: { 可用率: M.l4a_primary.usable, 分子: M.l4a_primary.s3, 分母: M.l4a_primary.n },
+}, null, 2) + "\n");
 
 // 控制台
 console.log("\n═══ 自动指标（全语料 " + M.slots_total + " 槽位）═══");
